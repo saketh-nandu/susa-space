@@ -1,0 +1,6 @@
+{
+  "name": "SUSA Space",
+  "description": "A luxury personal life operating system and private memory-first digital universe for two.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

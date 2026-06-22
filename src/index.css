@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Cormorant Garamond", ui-serif, Georgia, serif;
+  --font-mono: "Fira Code", monospace;
+  
+  --color-ivory: #F5F2ED;
+  --color-champagne: #FAF9F6;
+  --color-stone-warm: #FAF9F6;
+  --color-charcoal: #1C1C1C;
+  --color-gold-premium: #7C7872;
+  --color-soft-gray: #E5E1D8;
+}
+
+@layer base {
+  body {
+    background-color: #F5F2ED; /* Warm linen / oatmeal base */
+    color: #1C1C1C; /* Crisp dark charcoal */
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Luxury transitions and typography accents */
+.editorial-title {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+/* Dynamic custom scrollbars resembling clean architectural details */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #FAF9F6;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #7C7872;
+  border-radius: 4px;
+}
+
+/* Animations for constellation star mapping and constellation background */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.star-twinkle {
+  animation: twinkle 4s ease-in-out infinite;
+}
+
+/* Custom shadow to represent daylight from ando concrete slots */
+.daylight-shadow {
+  box-shadow: 0 4px 20px -2px rgba(80, 75, 70, 0.04), 0 2px 8px -1px rgba(80, 75, 70, 0.02);
+}
+
+.daylight-shadow-md {
+  box-shadow: 0 10px 30px -5px rgba(80, 75, 70, 0.06), 0 4px 12px -2px rgba(80, 75, 70, 0.03);
+}
+
+.daylight-shadow-lg {
+  box-shadow: 0 20px 50px -10px rgba(80, 75, 70, 0.08), 0 10px 20px -5px rgba(80, 75, 70, 0.04);
+}
+
+.noble-btn {
+  @apply px-4 py-2 bg-charcoal text-white hover:bg-stone-900 rounded-lg text-sm font-medium transition-all duration-300;
+  box-shadow: 0 4px 20px -2px rgba(80, 75, 70, 0.04), 0 2px 8px -1px rgba(80, 75, 70, 0.02);
+}
+
+.noble-input {
+  @apply px-4 py-2 border border-soft-gray focus:border-gold-premium outline-none rounded-lg text-sm bg-white transition-all duration-300;
+}

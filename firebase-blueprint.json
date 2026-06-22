@@ -1,0 +1,59 @@
+{
+  "entities": {
+    "SpaceState": {
+      "title": "Space State",
+      "description": "Entire state synchronization for Orbit and Susa space, enabling real-time collaboration between User A and User B.",
+      "type": "object",
+      "properties": {
+        "notes": {
+          "type": "array",
+          "description": "Public shared notes"
+        },
+        "planner": {
+          "type": "array",
+          "description": "Shared planners and daily schedule blocks"
+        },
+        "journal": {
+          "type": "array",
+          "description": "Private or shared journal entries"
+        },
+        "tasks": {
+          "type": "array",
+          "description": "Sync task management list"
+        },
+        "habits": {
+          "type": "array",
+          "description": "Sync habits list"
+        },
+        "goals": {
+          "type": "array",
+          "description": "Personal or shared life goals"
+        },
+        "files": {
+          "type": "array",
+          "description": "Cloud media assets and attachments"
+        },
+        "orbit": {
+          "type": "object",
+          "description": "Nested object containing Orbit messages, memories, companion data, and shared island statistics"
+        }
+      },
+      "required": [
+        "notes",
+        "planner",
+        "journal",
+        "tasks",
+        "habits",
+        "goals",
+        "files",
+        "orbit"
+      ]
+    }
+  },
+  "firestore": {
+    "spaces/{spaceId}": {
+      "schema": "SpaceState",
+      "description": "Primary communication and data synchronizer for the shared orbit workspace."
+    }
+  }
+}
