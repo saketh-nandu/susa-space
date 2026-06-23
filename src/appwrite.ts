@@ -43,11 +43,9 @@ export async function uploadToAppwrite(
   fileName?: string
 ): Promise<UploadResult> {
   try {
-    const ext = file.name.split('.').pop() || 'bin';
-    const safeName = fileName
-      ? fileName.replace(/[^a-zA-Z0-9._-]/g, '_')
-      : `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    console.log('[Appwrite Upload] Starting upload for file:', file.name);
     const fileId = ID.unique();
+    console.log('[Appwrite Upload] Using file ID:', fileId);
 
     const uploadedFile = await storage.createFile(
       BUCKET_ID,
@@ -55,6 +53,7 @@ export async function uploadToAppwrite(
       file
     );
 
+    console.log('[Appwrite Upload] Upload successful! File ID:', uploadedFile.$id);
     const publicUrl = storage.getFileView(BUCKET_ID, uploadedFile.$id);
     
     return { url: publicUrl.toString(), path: uploadedFile.$id };
@@ -121,25 +120,31 @@ export async function calculateStorageUsage(): Promise<{ totalMB: number; error?
  */
 export async function saveStateToAppwrite(state: any, spaceId = 'primary_space'): Promise<{ error?: string }> {
   try {
+    console.log('[Appwrite State Save] Creating document with ID:', spaceId);
     await databases.createDocument(
       DATABASE_ID,
       COLLECTION_SPACES,
       spaceId,
       state
     );
+    console.log('[Appwrite State Save] Document created successfully!');
     return {};
   } catch (error: any) {
+    console.error('[Appwrite State Save] Error:', error);
     // If document already exists, update it
     if (error.code === 409) {
       try {
+        console.log('[Appwrite State Save] Document exists, updating...');
         await databases.updateDocument(
           DATABASE_ID,
           COLLECTION_SPACES,
           spaceId,
           state
         );
+        console.log('[Appwrite State Save] Document updated successfully!');
         return {};
       } catch (updateError: any) {
+        console.error('[Appwrite State Save] Update error:', updateError);
         return { error: updateError.message };
       }
     }
