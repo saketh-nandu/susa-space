@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { loadChatMessagesFromSupabase, syncChatMessagesToSupabase } from './supabase';
+import { loadChatMessagesFromSupabase, syncChatMessagesToSupabase, subscribeToChatMessages } from './supabase';
 import {
   SusaState,
   PublicNote,
@@ -306,8 +306,22 @@ export const SusaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     loadSupabaseChat();
+    
+    // Subscribe to real-time updates
+    const unsubscribe = subscribeToChatMessages('primary_space', (messages) => {
+      if (!active) return;
+      setState((prev) => ({
+        ...prev,
+        orbit: {
+          ...prev.orbit,
+          messages,
+        },
+      }));
+    });
+
     return () => {
       active = false;
+      unsubscribe();
     };
   }, []);
 

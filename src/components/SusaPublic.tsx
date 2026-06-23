@@ -502,22 +502,7 @@ export default function SusaPublic() {
 
 
 
-          {/* System Purge & Clean Mechanism */}
-          <div className="border-t border-soft-gray pt-6 mt-2">
-            <p className="text-xs text-neutral-400 uppercase tracking-widest font-semibold mb-3">System Maintenance</p>
-            <button 
-              onClick={() => {
-                if (window.confirm("Are you sure you want to clean all demo data and live states? This will completely clear all files, chats, reminders, journals, and task registries across both your local cache and Firestore database.")) {
-                  resetToSeeds();
-                  window.alert("✨ All workspace state cleaned successfully!");
-                }
-              }}
-              className="w-full flex items-center justify-center gap-2.5 px-3 py-2.5 rounded-xl border border-dashed border-red-200 hover:bg-rose-50/50 text-rose-850 hover:border-rose-300 transition-all duration-300 text-xs font-semibold shadow-2xs"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-700" />
-              Clear All Demo & Live Data
-            </button>
-          </div>
+
 
           <div className="mt-auto bg-champagne border border-soft-gray p-4 rounded-xl text-xs text-neutral-500 flex flex-col gap-3">
             <div className="flex items-center justify-between">

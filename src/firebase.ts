@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { initializeFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
+import { getAnalytics, isSupported } from 'firebase/analytics';
 
 // ── Firebase Configuration ────────────────────────────────────────────────────
 // Values are loaded from VITE_ environment variables so they can be configured
@@ -28,6 +29,7 @@ const firebaseConfig = {
   appId:
     import.meta.env.VITE_FIREBASE_APP_ID ||
     '1:861264937596:web:692da59b0e5123b85e7ff9',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 const databaseId =
@@ -53,4 +55,12 @@ const auth = getAuth(app);
 // Firebase Storage (used as a secondary fallback if Supabase is not configured)
 const storage = getStorage(app);
 
-export { app, db, auth, storage };
+// Initialize Analytics if supported
+let analytics;
+isSupported().then((supported) => {
+  if (supported) {
+    analytics = getAnalytics(app);
+  }
+});
+
+export { app, db, auth, storage, analytics };

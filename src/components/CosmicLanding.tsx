@@ -177,17 +177,40 @@ export default function CosmicLanding() {
         await updateProfile(cred.user, { displayName: name });
         loginFromFirebase(cred.user.email!, name, null);
       } else {
-        const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
-        loginFromFirebase(cred.user.email!, cred.user.displayName, cred.user.photoURL);
+        // Check if it's an Orbit ID (no @ symbol)
+        if (!email.includes('@')) {
+          // Verify Orbit ID and password (but don't authenticate Orbit)
+          const cleanId = email.trim().toLowerCase();
+          const cleanSecret = password.trim();
+          const isSaketh = cleanId === 'saketh_nandu127' || cleanId === 'saketh';
+          const isSupriya = cleanId === 'srirenu127' || cleanId === 'supriya';
+          const passwordOk = cleanSecret === 'SupriyaSaketh127';
+
+          if ((isSaketh || isSupriya) && passwordOk) {
+            // Log in with default SUSA account
+            const defaultEmail = isSaketh ? 'nandusaketh5@gmail.com' : 'supriya@example.com';
+            const defaultName = isSaketh ? 'Saketh' : 'Supriya';
+            const defaultAvatar = isSaketh 
+              ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200'
+              : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200';
+            login(defaultEmail, defaultName, defaultAvatar);
+          } else {
+            setMessage({ type: 'error', text: 'Incorrect Orbit ID or password.' });
+          }
+        } else {
+          // Regular Firebase email auth
+          const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+          loginFromFirebase(cred.user.email!, cred.user.displayName, cred.user.photoURL);
+        }
       }
     } catch (err: any) {
       const msg: Record<string, string> = {
         'auth/email-already-in-use': 'That email is already registered. Try logging in instead.',
-        'auth/invalid-email': 'Please enter a valid email address.',
+        'auth/invalid-email': 'Please enter a valid email address or Orbit ID.',
         'auth/weak-password': 'Password must be at least 6 characters.',
         'auth/user-not-found': 'No account found with that email.',
         'auth/wrong-password': 'Incorrect password.',
-        'auth/invalid-credential': 'Incorrect email or password.',
+        'auth/invalid-credential': 'Incorrect email, Orbit ID, or password.',
         'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.',
         'auth/configuration-not-found': 'Firebase auth is not fully configured for this app.',
         'auth/unauthorized-domain': 'Please authorize localhost in Firebase Authentication > Settings > Authorized domains.',
@@ -302,12 +325,7 @@ export default function CosmicLanding() {
               </svg>
               CONTINUE WITH GOOGLE
             </button>
-            <p className="text-[10px] text-center text-[#E4C59E]/70 font-mono tracking-[0.2em] uppercase">
-              Local preview: localhost:3000
-            </p>
-            <p className="text-[9px] text-center text-neutral-500 font-mono tracking-[0.18em] uppercase leading-relaxed">
-              Demo IDs: saketh_nandu127 / srirenu127 · password: SupriyaSaketh127
-            </p>
+
 
             <div className="flex items-center gap-3 text-neutral-600 font-mono text-[9px] uppercase tracking-[0.2em]">
               <span className="flex-1 h-[1px] bg-neutral-900" />OR USE EMAIL<span className="flex-1 h-[1px] bg-neutral-900" />
@@ -328,10 +346,10 @@ export default function CosmicLanding() {
               )}
 
               <div className="flex flex-col gap-1.5 text-left">
-                <label className="text-neutral-400 font-medium tracking-wider">EMAIL ADDRESS</label>
+                <label className="text-neutral-400 font-medium tracking-wider">EMAIL OR ID</label>
                 <div className="relative flex items-center">
                   <Mail className="absolute left-3.5 text-[#E4C59E]/70 w-3.5 h-3.5" />
-                  <input type="email" required placeholder="you@example.com" value={email}
+                  <input type="text" required placeholder="you@example.com or your_id127" value={email}
                     onChange={e => setEmail(e.target.value)}
                     className="w-full bg-neutral-900/60 border border-neutral-800 focus:border-[#E4C59E] outline-none rounded-xl py-3 pl-10 pr-4 text-white font-sans tracking-normal transition" />
                 </div>

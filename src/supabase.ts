@@ -99,6 +99,47 @@ export async function listBucketFolder(folder: string) {
 }
 
 /**
+ * Calculate total storage usage in MB
+ */
+export async function calculateStorageUsage(): Promise<{ totalMB: number; error?: string }> {
+  if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+    return { totalMB: 0, error: 'Supabase not configured' };
+  }
+
+  try {
+    // List all folders
+    const folders = ['memories', 'chat', 'voice', 'gallery', 'avatars'];
+    let totalBytes = 0;
+
+    for (const folder of folders) {
+      const { files, error } = await listBucketFolder(folder);
+      if (error) {
+        // Skip folder if error
+        continue;
+      }
+      for (const file of files) {
+        if (file.metadata && file.metadata.size) {
+          totalBytes += file.metadata.size;
+        }
+      }
+    }
+
+    // Also list root folder
+    const { files: rootFiles } = await listBucketFolder('');
+    for (const file of rootFiles) {
+      if (file.metadata && file.metadata.size) {
+        totalBytes += file.metadata.size;
+      }
+    }
+
+    const totalMB = totalBytes / (1024 * 1024);
+    return { totalMB };
+  } catch (error) {
+    return { totalMB: 0, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+/**
  * Persist chat messages to a Supabase table.
  * The table schema is documented in supabase/schema.sql.
  */
@@ -160,4 +201,38 @@ export async function loadChatMessagesFromSupabase(
       error: err instanceof Error ? err.message : 'Unknown error while loading chat messages.',
     };
   }
+}
+
+/**
+ * Subscribe to real-time chat updates
+ */
+export function subscribeToChatMessages(
+  spaceId = 'primary_space',
+  callback: (messages: ChatMessage[]) => void
+) {
+  if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+    return () => {};
+  }
+
+  const subscription = supabase
+    .channel(`chat_messages_${spaceId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'chat_messages',
+        filter: `space_id=eq.${spaceId}`
+      },
+      (payload: any) => {
+        if (payload.new && payload.new.payload) {
+          callback(payload.new.payload);
+        }
+      }
+    )
+    .subscribe();
+
+  return () => {
+    subscription.unsubscribe();
+  };
 }

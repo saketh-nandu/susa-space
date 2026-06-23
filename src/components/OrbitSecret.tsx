@@ -7,11 +7,11 @@ import NovaPet from './NovaPet';
 import { uploadToSupabase } from '../supabase';
 import {
   MessageSquare, Image, Star, Compass, Activity, Bell, Shield, MapPin,
-  Hourglass, Music, Sliders, Palette, LogOut, ArrowLeft, Send, Sparkles, 
-  Trash2, Pin, Bookmark, Heart, Play, Film, User, Gamepad2, Plus, 
+  Hourglass, Music, Sliders, Palette, LogOut, ArrowLeft, Send, Sparkles,
+  Trash2, Pin, Bookmark, Heart, Play, Film, User, Gamepad2, Plus,
   RotateCcw, Sparkle, Grid, Move, CloudRain, Tent, Waves, Moon,
   Upload, Mic, Volume2, Lock, Unlock, Flame, Zap, HelpCircle, Square,
-  Settings, Database, AlertTriangle, Download, Gift, Key, Check
+  Settings, Database, AlertTriangle, Download, Gift, Key, Check, File
 } from 'lucide-react';
 import SusaLogo from './SusaLogo';
 
@@ -152,12 +152,18 @@ export default function OrbitSecret() {
     setChatDragOver(false);
   };
 
-  const handleChatDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setChatDragOver(false);
-    if (!e.dataTransfer.files || !e.dataTransfer.files[0]) return;
-    const file = e.dataTransfer.files[0];
+  const getFileType = (file: File): 'image' | 'video' | 'voice' | 'file' => {
+    if (file.type.startsWith('image/')) return 'image';
+    if (file.type.startsWith('video/')) return 'video';
+    if (file.type.startsWith('audio/')) return 'voice';
+    return 'file';
+  };
 
+  const handleFileSelect = async (file: File) => {
+    setIsUploading(true);
+    setSelectedFile(file);
+    const fileType = getFileType(file);
+    
     const result = await uploadToSupabase(file, 'chat');
     if (result.error) {
       // Supabase not configured — use local data URL as fallback
@@ -165,14 +171,29 @@ export default function OrbitSecret() {
       reader.onload = () => {
         if (typeof reader.result === 'string') {
           setChatFileUrl(reader.result);
-          setChatFileType(file.type.startsWith('audio/') ? 'voice' : 'image');
+          setChatFileType(fileType);
         }
+        setIsUploading(false);
       };
       reader.readAsDataURL(file);
     } else {
       setChatFileUrl(result.url);
-      setChatFileType(file.type.startsWith('audio/') ? 'voice' : 'image');
+      setChatFileType(fileType);
+      setIsUploading(false);
     }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFileSelect(e.target.files[0]);
+    }
+  };
+
+  const handleChatDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setChatDragOver(false);
+    if (!e.dataTransfer.files || !e.dataTransfer.files[0]) return;
+    handleFileSelect(e.dataTransfer.files[0]);
   };
   
   // Custom companion feed animation trigger state
@@ -219,7 +240,49 @@ export default function OrbitSecret() {
   // Chat message attachments state
   const [typedMessage, setTypedMessage] = useState('');
   const [chatFileUrl, setChatFileUrl] = useState('');
-  const [chatFileType, setChatFileType] = useState<'text' | 'image' | 'video' | 'voice' | 'sticker'>('text');
+  const [chatFileType, setChatFileType] = useState<'text' | 'image' | 'video' | 'voice' | 'file'>('text');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null);
+  const [gifSearchQuery, setGifSearchQuery] = useState('');
+  const [gifs, setGifs] = useState<{ id: string; url: string }[]>([]);
+  const [isLoadingGifs, setIsLoadingGifs] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Giphy API search function
+  const searchGifs = async (query: string) => {
+    if (!query) {
+      // Default trending gifs
+      query = 'love';
+    }
+    setIsLoadingGifs(true);
+    try {
+      const apiKey = 'QBvYeEiQQ2sremzMPbRn4NCFGsMoy6KH';
+      const response = await fetch(
+        `https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(query)}&limit=12&rating=g`
+      );
+      const data = await response.json();
+      if (data.data) {
+        setGifs(data.data.map((gif: any) => ({
+          id: gif.id,
+          url: gif.images.fixed_width.url
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching gifs:', error);
+    } finally {
+      setIsLoadingGifs(false);
+    }
+  };
+
+  // Load trending gifs when picker opens
+  useEffect(() => {
+    if (showGifPicker && gifs.length === 0) {
+      searchGifs('love');
+    }
+  }, [showGifPicker]);
 
   // Constellation pan/zoom states
   const [constellationOffset, setConstellationOffset] = useState({ x: 0, y: 0 });
@@ -265,7 +328,7 @@ export default function OrbitSecret() {
   const [newMemTags, setNewMemTags] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [uploadedImgUrl, setUploadedImgUrl] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
+  const [isMemUploading, setIsMemUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
   // Live voice capsule recording simulation states
@@ -335,10 +398,29 @@ export default function OrbitSecret() {
   const [codeErrorMessage, setCodeErrorMessage] = useState('');
 
   // Supabase Storage & Bucket simulation
-  const [storageUsed, setStorageUsed] = useState(948.4); // MB
+  const [storageUsed, setStorageUsed] = useState(0); // MB
+  const [isLoadingStorage, setIsLoadingStorage] = useState(false);
   const STORAGE_LIMIT = 1000.0; // MB
   const storagePercent = (storageUsed / STORAGE_LIMIT) * 100;
   const isStorageAlmostFull = storagePercent >= 90;
+
+  // Load storage usage when settings tab opens
+  const loadStorageUsage = async () => {
+    setIsLoadingStorage(true);
+    const { calculateStorageUsage } = await import('../supabase');
+    const { totalMB, error } = await calculateStorageUsage();
+    if (!error) {
+      setStorageUsed(totalMB);
+    }
+    setIsLoadingStorage(false);
+  };
+
+  // Watch for orbit tab change to settings
+  useEffect(() => {
+    if (orbitTab === 'settings') {
+      loadStorageUsage();
+    }
+  }, [orbitTab]);
 
   // Real backup-generator routine (produces valid download stream)
   const handleDownloadBackup = () => {
@@ -566,7 +648,7 @@ export default function OrbitSecret() {
   ];
 
   const processDroppedMedia = async (file: File) => {
-    setIsUploading(true);
+    setIsMemUploading(true);
     setUploadProgress(0);
 
     // Simulate progress bar while uploading
@@ -588,17 +670,17 @@ export default function OrbitSecret() {
           : romanticPresets[Math.floor(Math.random() * romanticPresets.length)];
         setUploadedImgUrl(url);
         setUploadProgress(100);
-        setTimeout(() => setIsUploading(false), 300);
+        setTimeout(() => setIsMemUploading(false), 300);
       };
       reader.onerror = () => {
         setUploadedImgUrl(romanticPresets[Math.floor(Math.random() * romanticPresets.length)]);
-        setIsUploading(false);
+        setIsMemUploading(false);
       };
       reader.readAsDataURL(file);
     } else {
       setUploadedImgUrl(result.url);
       setUploadProgress(100);
-      setTimeout(() => setIsUploading(false), 300);
+      setTimeout(() => setIsMemUploading(false), 300);
     }
   };
 
@@ -1467,14 +1549,7 @@ export default function OrbitSecret() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button 
-                    onClick={() => simulatePartnerMessage()}
-                    className="bg-white hover:bg-stone-50 text-stone-700 border border-[#E5E1D8] text-[10px] md:text-[11px] px-2.5 py-1 md:py-1.5 rounded-lg md:rounded-xl flex items-center gap-1 transition duration-300 shadow-xs"
-                  >
-                    <Sparkles className="w-3 h-3 text-[#C5A880]" /> <span className="hidden xs:inline">Simulate typing</span><span className="xs:hidden">Simulate</span>
-                  </button>
-                </div>
+
               </div>
 
               {/* Chat flow console */}
@@ -1486,12 +1561,23 @@ export default function OrbitSecret() {
                       <div className="flex flex-col gap-1 max-w-[85%] md:max-w-md group">
                         
                         {/* Message node container */}
-                        <div className={`p-3 md:p-4 rounded-2xl md:rounded-3xl text-xs md:text-sm leading-relaxed daylight-shadow ${isMe ? 'bg-[#C5A880] text-white shadow-sm font-medium border border-stone-300' : 'bg-white text-stone-800 border border-[#E5E1D8] shadow-xs'}`}>
+                        <div className={`relative p-3 md:p-4 rounded-2xl md:rounded-3xl text-xs md:text-sm leading-relaxed daylight-shadow ${isMe ? 'bg-[#C5A880] text-white shadow-sm font-medium border border-stone-300' : 'bg-white text-stone-800 border border-[#E5E1D8] shadow-xs'}`}>
                           
                           <div className="flex items-center justify-between gap-6 font-mono text-[8px] md:text-[9px] uppercase tracking-wider mb-1 px-0.5 opacity-70">
                             <span className="font-bold">{m.sender === 'User A' ? 'Saketh' : 'Supriya'}</span>
                             <span>{new Date(m.timestamp).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}</span>
                           </div>
+
+                          {/* Reactions display */}
+                          {m.reactions && m.reactions.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {[...new Set(m.reactions.map(r => r.emoji))].map((emoji) => (
+                                <span key={emoji} className="bg-stone-100 border border-stone-200 px-2 py-1 rounded-full text-xs">
+                                  {emoji} {m.reactions.filter(r => r.emoji === emoji).length}
+                                </span>
+                              ))}
+                            </div>
+                          )}
 
                           {/* Text output */}
                           {m.type === 'text' && <p className="break-words">{renderMessageTextWithLinks(m.text)}</p>}
@@ -1504,22 +1590,64 @@ export default function OrbitSecret() {
                             </div>
                           )}
 
+                          {/* Video file */}
+                          {m.type === 'video' && (
+                            <div className="flex flex-col gap-2">
+                              <video controls src={m.fileUrl} className="rounded-xl border border-stone-200 size-full max-h-60 md:max-h-80" />
+                              <p className="italic text-[10px] md:text-[11px] text-stone-500 mt-1">{m.fileName} ({m.fileSize})</p>
+                            </div>
+                          )}
+
+                          {/* Audio/Voice note */}
                           {m.type === 'voice' && (
                             <div className="flex items-center gap-2 md:gap-3 bg-stone-100 p-2 rounded-xl border border-stone-250/50">
-                              <button className="bg-[#C5A880] w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center p-1.5 shrink-0">
-                                <Play className="w-3 h-3 text-white" />
-                              </button>
-                              <div className="flex-1 min-w-0">
-                                <div className="h-1 bg-stone-350 rounded-full w-20 md:w-24"></div>
-                                <span className="text-[9px] font-mono text-stone-500 mt-1 block">Voice Note: {m.duration}</span>
+                              <audio controls src={m.fileUrl} className="flex-1 h-10" />
+                            </div>
+                          )}
+
+                          {/* Generic file */}
+                          {m.type === 'file' && (
+                            <div className="flex items-center gap-2 bg-stone-100 p-3 rounded-xl border border-stone-200">
+                              <div className="w-10 h-10 bg-[#C5A880] rounded-lg flex items-center justify-center text-white">
+                                <File className="w-5 h-5" />
                               </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{m.fileName}</p>
+                                <p className="text-xs text-stone-500">{m.fileSize}</p>
+                              </div>
+                              <a href={m.fileUrl} download className="bg-stone-200 hover:bg-stone-300 p-2 rounded-lg">
+                                <Download className="w-4 h-4" />
+                              </a>
                             </div>
                           )}
 
                           {/* Actions overlay panel */}
                           <div className="mt-2 pt-1.5 border-t border-stone-200/40 flex flex-wrap gap-2 md:gap-3 text-stone-400 group-hover:opacity-100 opacity-20 transition-all duration-300 select-none">
-                            <button onClick={() => addReaction(m.id, '❤️')} className="hover:text-red-500 text-[10px] md:text-xs">❤️</button>
-                            <button onClick={() => addReaction(m.id, '✨')} className="hover:text-amber-500 text-[10px] md:text-xs">✨</button>
+                            <button 
+                              onClick={() => setShowReactionPicker(showReactionPicker === m.id ? null : m.id)} 
+                              className="hover:text-stone-850 text-[10px] md:text-xs"
+                              title="Add reaction"
+                            >
+                              😊
+                            </button>
+                            {showReactionPicker === m.id && (
+                              <div className="absolute bottom-full mb-2 bg-white border border-[#E5E1D8] rounded-xl p-2 shadow-lg z-40 max-h-48 overflow-y-auto">
+                                <div className="grid grid-cols-8 gap-1">
+                                  {['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '👻', '👽', '👾', '🤖', '🎃', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾', '👋', '🤚', '🖐', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '🔥', '✨', '⭐', '🌟', '💫', '⚡', '☄️', '💥'].map((emoji) => (
+                                    <button 
+                                      key={emoji}
+                                      onClick={() => {
+                                        addReaction(m.id, emoji);
+                                        setShowReactionPicker(null);
+                                      }}
+                                      className="text-xl hover:bg-stone-100 p-1 rounded transition"
+                                    >
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             <button onClick={() => { bookmarkMessage(m.id); }} className="hover:text-stone-850" title="Bookmark message">
                               <Bookmark className="w-3 h-3" />
                             </button>
@@ -1567,7 +1695,7 @@ export default function OrbitSecret() {
               </div>
 
               {/* Message Typing Panel */}
-              <div className="bg-white border border-[#E5E1D8] p-3 md:p-4 rounded-xl md:rounded-[28px] flex flex-col gap-2 md:gap-3 shadow-xs shrink-0">
+              <div className="relative bg-white border border-[#E5E1D8] p-3 md:p-4 rounded-xl md:rounded-[28px] flex flex-col gap-2 md:gap-3 shadow-xs shrink-0">
                 {/* Refer Orbit Tab Toolbar */}
                 <div className="flex items-center gap-1.5 md:gap-2 overflow-x-auto pb-1.5 border-b border-stone-100 scrollbar-none shrink-0">
                   <span className="text-[8px] md:text-[9px] uppercase font-mono tracking-wider text-[#7C7872] mr-1 flex items-center gap-1 shrink-0 font-semibold">
@@ -1645,48 +1773,166 @@ export default function OrbitSecret() {
                   </button>
                 </div>
 
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
+                  className="hidden"
+                  onChange={handleFileInputChange}
+                />
+
                 {chatFileUrl && (
                   <div className="flex items-center justify-between bg-[#FAF9F6] p-2 rounded-xl border border-gold-premium shrink-0">
-                    <span className="text-[10px] text-stone-700 truncate">Selected image: {chatFileUrl.substring(0, 40)}...</span>
-                    <button onClick={() => setChatFileUrl('')} className="text-red-500 hover:text-red-600 text-[10px] font-semibold px-2">Cancel</button>
+                    <span className="text-[10px] text-stone-700 truncate">
+                      Selected: {selectedFile?.name || 'File'} ({selectedFile ? (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB' : '2 MB'})
+                    </span>
+                    <button onClick={() => {
+                      setChatFileUrl('');
+                      setChatFileType('text');
+                      setSelectedFile(null);
+                    }} className="text-red-500 hover:text-red-600 text-[10px] font-semibold px-2">Cancel</button>
                   </div>
                 )}
                 
                 <div className="flex gap-2 items-center">
+                  {/* Emoji button */}
+                  <button 
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    type="button"
+                    className="p-2.5 rounded-xl border border-stone-200 hover:border-[#C5A880] text-stone-500 hover:text-stone-850 transition bg-white shrink-0"
+                    title="Add emoji"
+                  >
+                    <span className="text-sm">😊</span>
+                  </button>
+
+                  {/* GIF button */}
+                  <button 
+                    onClick={() => setShowGifPicker(!showGifPicker)}
+                    type="button"
+                    className="p-2.5 rounded-xl border border-stone-200 hover:border-[#C5A880] text-stone-500 hover:text-stone-850 transition bg-white shrink-0"
+                    title="Add GIF"
+                  >
+                    <span className="text-sm font-bold">GIF</span>
+                  </button>
+
+                  {/* File attach button */}
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    type="button"
+                    className="p-2.5 rounded-xl border border-stone-200 hover:border-[#C5A880] text-stone-500 hover:text-stone-850 transition bg-white shrink-0 disabled:opacity-50"
+                    title="Attach file"
+                    disabled={isUploading}
+                  >
+                    {isUploading ? <div className="w-3.5 h-3.5 border-2 border-[#C5A880] border-t-transparent rounded-full animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                  </button>
+
                   <input 
                     type="text" 
                     placeholder="Lock a fresh message into eternal history..." 
                     className="flex-1 bg-[#FAF9F6] border border-[#E5E1D8] focus:border-[#C5A880] outline-none rounded-xl md:rounded-2xl px-3 py-2 md:px-4 md:py-3 text-xs md:text-sm text-stone-850 placeholder-stone-400"
                     value={typedMessage}
                     onChange={(e) => setTypedMessage(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (sendOrbitMessage(typedMessage, chatFileType, chatFileUrl ? { name: 'Shared_File.jpg', url: chatFileUrl, size: '2 MB' } : undefined), setTypedMessage(''), setChatFileUrl(''))}
-                  />
-
-                  {/* Mock file attaching button */}
-                  <button 
-                    onClick={() => {
-                      setChatFileUrl('https://images.unsplash.com/photo-1543007630-9710e4a00a20?auto=format&fit=crop&q=80&w=500');
-                      setChatFileType('image');
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const fileDetails = selectedFile ? {
+                          name: selectedFile.name,
+                          url: chatFileUrl,
+                          size: (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB'
+                        } : undefined;
+                        sendOrbitMessage(typedMessage, chatFileType, fileDetails);
+                        setTypedMessage('');
+                        setChatFileUrl('');
+                        setChatFileType('text');
+                        setSelectedFile(null);
+                      }
                     }}
-                    type="button"
-                    className="p-2.5 rounded-xl border border-stone-200 hover:border-[#C5A880] text-stone-500 hover:text-stone-850 transition bg-white shrink-0"
-                    title="Mock image upload"
-                  >
-                    <Image className="w-3.5 h-3.5" />
-                  </button>
+                  />
                   
                   <button 
                     onClick={() => {
-                      sendOrbitMessage(typedMessage, chatFileType, chatFileUrl ? { name: 'Shared_File.jpg', url: chatFileUrl, size: '2 MB' } : undefined);
+                      const fileDetails = selectedFile ? {
+                        name: selectedFile.name,
+                        url: chatFileUrl,
+                        size: (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB'
+                      } : undefined;
+                      sendOrbitMessage(typedMessage, chatFileType, fileDetails);
                       setTypedMessage('');
                       setChatFileUrl('');
+                      setChatFileType('text');
+                      setSelectedFile(null);
                     }}
                     type="button"
-                    className="bg-[#C5A880] hover:bg-opacity-95 text-white rounded-xl p-2.5 flex items-center justify-center transition shadow-xs shrink-0"
+                    className="bg-[#C5A880] hover:bg-opacity-95 text-white rounded-xl p-2.5 flex items-center justify-center transition shadow-xs shrink-0 disabled:opacity-50"
+                    disabled={isUploading}
                   >
                     <Send className="w-3.5 h-3.5" />
                   </button>
                 </div>
+
+                {/* Emoji Picker */}
+                {showEmojiPicker && (
+                  <div className="absolute bottom-full mb-2 bg-white border border-[#E5E1D8] rounded-xl p-3 shadow-lg z-50 max-h-64 overflow-y-auto">
+                    <div className="grid grid-cols-8 gap-1">
+                      {['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '👻', '👽', '👾', '🤖', '🎃', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾', '👋', '🤚', '🖐', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '🔥', '✨', '⭐', '🌟', '💫', '⚡', '☄️', '💥', '🌪', '🌈', '☀️', '🌤', '⛅', '🌥', '☁️', '🌦', '🌧', '⛈', '🌩', '🌨', '❄️', '☃️', '⛄', '🌬', '💨', '💧', '💦', '☔', '☂️', '🌊', '💫', '🌙', '⭐', '🌟', '✨', '⚡', '🎶', '🎵', '🎵', '🎶', '🎤', '🎧', '🎼', '🎹', '🥁', '🎷', '🎸', '🎺', '🎻', '🏈', '⚾', '🥎', '⚽', '🥅', '🏀', '🏐', '🏉', '🎾', '🥏', '🎱', '🪀', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '⛳', '⛸', '🎿', '🛷', '🥌', '🎯', '🪃', '🎣', '🤿', '🎽', '🎿', '🛷', '🎪', '🎭', '🎨', '🎬', '🎤', '🎧', '🎼', '🎹', '🎮', '🎰', '🎲', '♟', '🎯', '🎳', '🎰', '🎮', '🎲', '🎰', '🎯', '🎳', '🎲', '🎰', '🎪', '🎭', '🎨', '🎬', '🎤', '🎧', '🎼', '🎹', '🎮', '🎰', '🎲', '🎯', '🎳', '🎲', '🎰', '🎪', '🎭', '🎨', '🎬', '🎤', '🎧', '🎼', '🎹', '🎮', '🎰', '🎲', '🎯', '🎳', '🎲', '🎰', '🎪', '🎭', '🎨', '🎬', '🎤', '🎧', '🎼', '🎹', '🎮', '🎰', '🎲', '🎯', '🎳', '🎲', '🎰'].map((emoji) => (
+                        <button 
+                          key={emoji}
+                          onClick={() => {
+                            setTypedMessage(prev => prev + emoji);
+                            setShowEmojiPicker(false);
+                          }}
+                          className="text-xl hover:bg-stone-100 p-1 rounded transition"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* GIF Picker */}
+                {showGifPicker && (
+                  <div className="absolute bottom-full mb-2 bg-white border border-[#E5E1D8] rounded-xl p-3 shadow-lg z-50 w-80 max-h-80 overflow-y-auto">
+                    {/* Search bar */}
+                    <div className="mb-3">
+                      <input 
+                        type="text"
+                        placeholder="Search GIFs..."
+                        value={gifSearchQuery}
+                        onChange={(e) => setGifSearchQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            searchGifs(gifSearchQuery);
+                          }
+                        }}
+                        className="w-full bg-[#FAF9F6] border border-[#E5E1D8] focus:border-[#C5A880] outline-none rounded-xl px-3 py-2 text-xs"
+                      />
+                      <button 
+                        onClick={() => searchGifs(gifSearchQuery)}
+                        className="mt-2 w-full bg-[#C5A880] hover:bg-opacity-90 text-white rounded-lg py-1.5 text-xs font-semibold transition"
+                      >
+                        {isLoadingGifs ? 'Loading...' : 'Search'}
+                      </button>
+                    </div>
+                    {/* GIF grid */}
+                    <div className="grid grid-cols-3 gap-2">
+                      {gifs.map((gif) => (
+                        <button 
+                          key={gif.id}
+                          onClick={() => {
+                            setChatFileUrl(gif.url);
+                            setChatFileType('image');
+                            setSelectedFile(null);
+                            setShowGifPicker(false);
+                          }}
+                          className="aspect-square overflow-hidden rounded-lg border border-stone-200 hover:border-[#C5A880] transition"
+                        >
+                          <img src={gif.url} alt="GIF" className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -1882,7 +2128,7 @@ export default function OrbitSecret() {
                           onChange={handleMemFileSelect}
                         />
                         
-                        {isUploading ? (
+                        {isMemUploading ? (
                           <div className="flex flex-col items-center gap-1.5 py-1">
                             <RotateCcw className="w-5 h-5 text-[#C5A880] animate-spin" />
                             <span className="text-[10px] text-[#C5A880] font-mono font-semibold">Crystallizing {uploadProgress}%</span>
@@ -3041,12 +3287,21 @@ export default function OrbitSecret() {
                   <h2 className="text-2xl font-serif font-bold text-[#1C1C1C]">Supabase Cloud Bucket Storage Manager</h2>
                   <p className="text-xs text-stone-500 mt-1">Monitor real-time remote media buckets, storage limits, and safely download backups.</p>
                 </div>
-                <button 
-                  onClick={handleDownloadBackup}
-                  className="bg-[#1C1C1C] hover:bg-stone-850 text-white text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all duration-300 shadow-sm font-semibold"
-                >
-                  <Download className="w-4 h-4" /> Download Full Orbit Backup
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={loadStorageUsage}
+                    disabled={isLoadingStorage}
+                    className="bg-white hover:bg-stone-50 border border-[#E5E1D8] text-stone-700 text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all duration-300 shadow-sm font-semibold disabled:opacity-50"
+                  >
+                    {isLoadingStorage ? 'Loading...' : '🔄 Refresh'}
+                  </button>
+                  <button 
+                    onClick={handleDownloadBackup}
+                    className="bg-[#1C1C1C] hover:bg-stone-850 text-white text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all duration-300 shadow-sm font-semibold"
+                  >
+                    <Download className="w-4 h-4" /> Download Full Orbit Backup
+                  </button>
+                </div>
               </div>
 
               {/* Grid 2 Columns */}
@@ -3116,15 +3371,6 @@ export default function OrbitSecret() {
                           </p>
                           <div className="mt-3 flex flex-wrap gap-2">
                             <button 
-                              onClick={() => {
-                                setStorageUsed(480.2); // Clean/simulate deletion!
-                                alert("🧹 Space cleared! Removed 468.2 MB of legacy temporary video transcoders and cache chunks from Supabase stargazing bucket.");
-                              }}
-                              className="bg-red-600 hover:bg-red-700 text-white font-mono text-[10px] px-3 py-1.5 rounded-lg transition font-bold"
-                            >
-                              🧹 Clear Old Cache Layers (Free Up 468MB)
-                            </button>
-                            <button 
                               onClick={handleDownloadBackup}
                               className="bg-white hover:bg-red-100/50 text-red-900 font-semibold border border-red-200 text-[10px] px-3 py-1.5 rounded-lg transition"
                             >
@@ -3140,21 +3386,21 @@ export default function OrbitSecret() {
                   <div className="bg-white border border-[#E5E1D8] p-6 rounded-[32px] shadow-sm flex flex-col gap-4">
                     <div>
                       <h3 className="font-serif text-base font-bold text-stone-850">Cloud Integration Credentials</h3>
-                      <p className="text-xs text-stone-500 mt-1">Configure real connection keys for real-time backend updates.</p>
+                      <p className="text-xs text-stone-500 mt-1">Current Supabase configuration from environment variables.</p>
                     </div>
 
                     <div className="flex flex-col gap-3 text-xs">
                       <div className="flex flex-col gap-1.5">
                         <label className="text-[10px] font-mono font-bold text-stone-450">SUPABASE_PROJECT_URL</label>
                         <div className="bg-stone-50 border border-stone-200 rounded-xl p-2.5 font-mono text-stone-605 select-all truncate">
-                          https://uxvjdrxsqbylywhguxze.supabase.co
+                          {import.meta.env.VITE_SUPABASE_URL || 'Not configured'}
                         </div>
                       </div>
 
                       <div className="flex flex-col gap-1.5">
                         <label className="text-[10px] font-mono font-bold text-stone-450">SUPABASE_ANON_KEY (CLIENT PUBLIC KEY)</label>
                         <div className="bg-stone-50 border border-stone-200 rounded-xl p-2.5 font-mono text-stone-605 select-all truncate">
-                          eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZjYy...
+                          {import.meta.env.VITE_SUPABASE_ANON_KEY ? import.meta.env.VITE_SUPABASE_ANON_KEY.slice(0, 50) + '...' : 'Not configured'}
                         </div>
                       </div>
                     </div>
