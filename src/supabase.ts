@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import type { ChatMessage } from './types';
+import type { ChatMessage, OrbitMemory, MemoryCollection, FutureItem, NovaCompanion, SharedIsland, CloudFile } from './types';
 
 // Supabase credentials — set via .env (VITE_ prefix exposes them to the frontend bundle)
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
@@ -222,6 +222,103 @@ export function subscribeToChatMessages(
         event: '*',
         schema: 'public',
         table: 'chat_messages',
+        filter: `space_id=eq.${spaceId}`
+      },
+      (payload: any) => {
+        if (payload.new && payload.new.payload) {
+          callback(payload.new.payload);
+        }
+      }
+    )
+    .subscribe();
+
+  return () => {
+    subscription.unsubscribe();
+  };
+}
+
+// ── Full Orbit State Helpers ────────────────────────────────────────────────
+
+interface OrbitState {
+  messages: ChatMessage[];
+  memories: OrbitMemory[];
+  collections: MemoryCollection[];
+  futureItems: FutureItem[];
+  nova: NovaCompanion;
+  island: SharedIsland;
+  achievements: any[];
+  watchlist: any[];
+  currentMood: any;
+  currentMusic: any;
+  lastActive: any;
+  // Add other orbit state properties as needed
+}
+
+export async function saveOrbitStateToSupabase(
+  orbitState: OrbitState,
+  spaceId = 'primary_space'
+) {
+  if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+    return { error: 'Supabase not configured' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('orbit_state')
+      .upsert(
+        {
+          space_id: spaceId,
+          payload: orbitState,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'space_id' }
+      );
+
+    return { error };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+}
+
+export async function loadOrbitStateFromSupabase(
+  spaceId = 'primary_space'
+) {
+  if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+    return { orbitState: null, error: 'Supabase not configured' };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('orbit_state')
+      .select('payload')
+      .eq('space_id', spaceId)
+      .maybeSingle();
+
+    return { orbitState: data?.payload, error };
+  } catch (err) {
+    return { 
+      orbitState: null, 
+      error: err instanceof Error ? err.message : 'Unknown error' 
+    };
+  }
+}
+
+export function subscribeToOrbitState(
+  spaceId = 'primary_space',
+  callback: (orbitState: OrbitState) => void
+) {
+  if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+    return () => {};
+  }
+
+  const subscription = supabase
+    .channel(`orbit_state_${spaceId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'orbit_state',
         filter: `space_id=eq.${spaceId}`
       },
       (payload: any) => {

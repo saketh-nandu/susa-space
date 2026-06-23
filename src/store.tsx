@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { loadChatMessagesFromSupabase, syncChatMessagesToSupabase, subscribeToChatMessages } from './supabase';
+import { loadChatMessagesFromSupabase, syncChatMessagesToSupabase, subscribeToChatMessages, saveOrbitStateToSupabase, loadOrbitStateFromSupabase, subscribeToOrbitState } from './supabase';
 import {
   SusaState,
   PublicNote,
@@ -194,7 +194,7 @@ export const SusaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearInterval(interval);
   }, [state.currentUser?.name]);
 
-  // Save state on change and sync to Firestore
+  // Save state on change and sync to Firestore & Supabase
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     
@@ -210,12 +210,19 @@ export const SusaProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const syncToSupabase = async () => {
       try {
-        const result = await syncChatMessagesToSupabase(state.orbit.messages);
-        if (result.error) {
-          console.warn('[SUSA] Supabase chat sync warning:', result.error);
+        // Sync chat messages
+        const chatResult = await syncChatMessagesToSupabase(state.orbit.messages);
+        if (chatResult.error) {
+          console.warn('[SUSA] Supabase chat sync warning:', chatResult.error);
+        }
+        
+        // Sync full orbit state
+        const orbitResult = await saveOrbitStateToSupabase(state.orbit);
+        if (orbitResult.error) {
+          console.warn('[SUSA] Supabase orbit sync warning:', orbitResult.error);
         }
       } catch (err) {
-        console.warn('[SUSA] Supabase chat sync failed:', err);
+        console.warn('[SUSA] Supabase sync failed:', err);
       }
     };
 
@@ -291,37 +298,52 @@ export const SusaProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let active = true;
 
-    const loadSupabaseChat = async () => {
-      const result = await loadChatMessagesFromSupabase();
+    const loadSupabaseData = async () => {
+      // Load full orbit state
+      const orbitResult = await loadOrbitStateFromSupabase();
       if (!active) return;
-      if (!result.error && result.messages.length > 0) {
+      
+      if (!orbitResult.error && orbitResult.orbitState) {
         setState((prev) => ({
           ...prev,
           orbit: {
             ...prev.orbit,
-            messages: result.messages,
+            ...orbitResult.orbitState,
           },
         }));
+      } else {
+        // Fallback to just loading chat messages if orbit state doesn't exist
+        const chatResult = await loadChatMessagesFromSupabase();
+        if (!active) return;
+        if (!chatResult.error && chatResult.messages.length > 0) {
+          setState((prev) => ({
+            ...prev,
+            orbit: {
+              ...prev.orbit,
+              messages: chatResult.messages,
+            },
+          }));
+        }
       }
     };
 
-    loadSupabaseChat();
+    loadSupabaseData();
     
-    // Subscribe to real-time updates
-    const unsubscribe = subscribeToChatMessages('primary_space', (messages) => {
+    // Subscribe to real-time orbit state updates
+    const unsubscribeOrbit = subscribeToOrbitState('primary_space', (orbitState) => {
       if (!active) return;
       setState((prev) => ({
         ...prev,
         orbit: {
           ...prev.orbit,
-          messages,
+          ...orbitState,
         },
       }));
     });
 
     return () => {
       active = false;
-      unsubscribe();
+      unsubscribeOrbit();
     };
   }, []);
 

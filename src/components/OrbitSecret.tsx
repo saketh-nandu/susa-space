@@ -1950,17 +1950,44 @@ export default function OrbitSecret() {
             >
               <div>
                 <h2 className="text-xl font-light text-stone-800">Shared Media Repository</h2>
-                <p className="text-xs text-stone-500">Grid displaying photos, drawings, and files preserved inside the Orbit space.</p>
+                <p className="text-xs text-stone-500">Grid displaying photos, drawings, videos, and files preserved inside the Orbit space.</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                {/* Display files from state.files (isOrbit=true) */}
                 {state.files.filter(f => f.isOrbit).map((file) => (
                   <div key={file.id} className="bg-white border border-[#E5E1D8] rounded-2xl overflow-hidden group shadow-sm hover:shadow-md transition">
-                    <img 
-                      src={file.url.startsWith('http') ? file.url : 'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?auto=format&fit=crop&q=80&w=400'} 
-                      alt="shared photograph" 
-                      className="w-full h-40 object-cover group-hover:scale-103 transition duration-500"
-                    />
+                    {file.type === 'image' && (
+                      <img 
+                        src={file.url.startsWith('http') ? file.url : 'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?auto=format&fit=crop&q=80&w=400'} 
+                        alt={file.name} 
+                        className="w-full h-40 object-cover group-hover:scale-103 transition duration-500"
+                      />
+                    )}
+                    {file.type === 'video' && (
+                      <video 
+                        src={file.url} 
+                        className="w-full h-40 object-cover group-hover:scale-103 transition duration-500"
+                        controls
+                      />
+                    )}
+                    {file.type === 'voice' && (
+                      <div className="w-full h-40 bg-stone-100 flex items-center justify-center">
+                        <audio 
+                          src={file.url} 
+                          controls
+                          className="w-full px-4"
+                        />
+                      </div>
+                    )}
+                    {file.type === 'file' && (
+                      <div className="w-full h-40 bg-stone-100 flex items-center justify-center">
+                        <div className="text-center">
+                          <File className="w-12 h-12 text-stone-400 mx-auto mb-2" />
+                          <span className="text-xs text-stone-500 font-mono">{file.name}</span>
+                        </div>
+                      </div>
+                    )}
                     <div className="p-4 flex flex-col gap-2 bg-white">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] bg-stone-100 px-2 py-0.5 rounded text-stone-800 font-mono font-semibold">{file.type}</span>
@@ -1968,6 +1995,53 @@ export default function OrbitSecret() {
                       </div>
                       <h4 className="text-xs font-semibold text-stone-800 truncate">{file.name}</h4>
                       <p className="text-[10px] text-stone-500">Brought by: {file.sender || 'Companion'}</p>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Display media from chat messages */}
+                {state.orbit.messages.filter(m => m.fileUrl).map((msg) => (
+                  <div key={msg.id} className="bg-white border border-[#E5E1D8] rounded-2xl overflow-hidden group shadow-sm hover:shadow-md transition">
+                    {msg.type === 'image' && (
+                      <img 
+                        src={msg.fileUrl} 
+                        alt={msg.fileName || 'Chat image'} 
+                        className="w-full h-40 object-cover group-hover:scale-103 transition duration-500"
+                      />
+                    )}
+                    {msg.type === 'video' && (
+                      <video 
+                        src={msg.fileUrl} 
+                        className="w-full h-40 object-cover group-hover:scale-103 transition duration-500"
+                        controls
+                      />
+                    )}
+                    {msg.type === 'voice' && (
+                      <div className="w-full h-40 bg-stone-100 flex items-center justify-center">
+                        <audio 
+                          src={msg.fileUrl} 
+                          controls
+                          className="w-full px-4"
+                        />
+                      </div>
+                    )}
+                    {msg.type === 'file' && (
+                      <div className="w-full h-40 bg-stone-100 flex items-center justify-center">
+                        <div className="text-center">
+                          <File className="w-12 h-12 text-stone-400 mx-auto mb-2" />
+                          <span className="text-xs text-stone-500 font-mono truncate">{msg.fileName}</span>
+                        </div>
+                      </div>
+                    )}
+                    <div className="p-4 flex flex-col gap-2 bg-white">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] bg-stone-100 px-2 py-0.5 rounded text-stone-800 font-mono font-semibold">{msg.type}</span>
+                        <span className="text-[10px] text-stone-400">
+                          {new Date(msg.timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-semibold text-stone-800 truncate">{msg.fileName || 'Shared media'}</h4>
+                      <p className="text-[10px] text-stone-500">Brought by: {msg.sender === 'User A' ? 'Saketh' : 'Supriya'}</p>
                     </div>
                   </div>
                 ))}

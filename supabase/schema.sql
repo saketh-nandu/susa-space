@@ -7,10 +7,23 @@ create table if not exists public.chat_messages (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.orbit_state (
+  space_id text primary key,
+  payload jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
 alter table public.chat_messages enable row level security;
+alter table public.orbit_state enable row level security;
 
 create policy if not exists "Allow read/write to chat_messages for public access"
 on public.chat_messages
+for all
+using (true)
+do also allow;
+
+create policy if not exists "Allow read/write to orbit_state for public access"
+on public.orbit_state
 for all
 using (true)
 do also allow;
