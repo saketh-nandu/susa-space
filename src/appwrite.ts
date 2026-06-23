@@ -125,7 +125,7 @@ export async function saveStateToAppwrite(state: any, spaceId = 'primary_space')
       DATABASE_ID,
       COLLECTION_SPACES,
       spaceId,
-      state
+      { data: state }
     );
     console.log('[Appwrite State Save] Document created successfully!');
     return {};
@@ -139,7 +139,7 @@ export async function saveStateToAppwrite(state: any, spaceId = 'primary_space')
           DATABASE_ID,
           COLLECTION_SPACES,
           spaceId,
-          state
+          { data: state }
         );
         console.log('[Appwrite State Save] Document updated successfully!');
         return {};
@@ -162,7 +162,7 @@ export async function loadStateFromAppwrite(spaceId = 'primary_space'): Promise<
       COLLECTION_SPACES,
       spaceId
     );
-    return { state: doc };
+    return { state: doc.data };
   } catch (error: any) {
     return { state: null, error: error.message };
   }
@@ -184,7 +184,7 @@ export function subscribeToState(
         (response) => {
           if (response.events.includes('databases.*.documents.*.update') || 
               response.events.includes('databases.*.documents.*.create')) {
-            callback(response.payload);
+            callback(response.payload.data);
           }
         }
       );

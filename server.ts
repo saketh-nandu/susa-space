@@ -7,7 +7,7 @@ import { GoogleGenAI } from '@google/genai';
 dotenv.config();
 
 const app = express();
-const PORT = Number(process.env.PORT || 3002);
+const PORT = Number(process.env.PORT || 3003);
 
 app.use(express.json());
 
