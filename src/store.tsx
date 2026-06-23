@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { db } from './firebase';
-import { loadChatMessagesFromSupabase, syncChatMessagesToSupabase, subscribeToChatMessages, saveOrbitStateToSupabase, loadOrbitStateFromSupabase, subscribeToOrbitState } from './supabase';
+import { saveStateToAppwrite, loadStateFromAppwrite, subscribeToState } from './appwrite';
 import {
   SusaState,
   PublicNote,
@@ -194,48 +192,87 @@ export const SusaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearInterval(interval);
   }, [state.currentUser?.name]);
 
-  // Save state on change and sync to Firestore & Supabase
+  // Save state on change and sync to Appwrite
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     
-    const syncToFirebase = async () => {
+    const syncToAppwrite = async () => {
       try {
-        const docRef = doc(db, 'spaces', 'primary_space');
         const cleanState = JSON.parse(JSON.stringify(state));
-        await setDoc(docRef, cleanState);
+        await saveStateToAppwrite(cleanState);
       } catch (err) {
-        console.error("Firestore serialization failed:", err);
+        console.error("[Appwrite] Sync failed:", err);
       }
     };
 
-    const syncToSupabase = async () => {
-      try {
-        // Sync chat messages
-        const chatResult = await syncChatMessagesToSupabase(state.orbit.messages);
-        if (chatResult.error) {
-          console.warn('[SUSA] Supabase chat sync warning:', chatResult.error);
-        }
-        
-        // Sync full orbit state
-        const orbitResult = await saveOrbitStateToSupabase(state.orbit);
-        if (orbitResult.error) {
-          console.warn('[SUSA] Supabase orbit sync warning:', orbitResult.error);
-        }
-      } catch (err) {
-        console.warn('[SUSA] Supabase sync failed:', err);
-      }
-    };
-
-    syncToFirebase();
-    syncToSupabase();
+    syncToAppwrite();
   }, [state]);
 
-  // Listen to Firestore updates
+  // Listen to Appwrite updates
   useEffect(() => {
-    const docRef = doc(db, 'spaces', 'primary_space');
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const remoteData = docSnap.data() as SusaState;
+    let active = true;
+
+    const loadAppwriteData = async () => {
+      // Load full state from Appwrite
+      const result = await loadStateFromAppwrite();
+      if (!active) return;
+      
+      if (!result.error && result.state) {
+        setState((prev) => {
+          const remoteData = result.state as SusaState;
+          
+          // Remote hide logic
+          const isA = activeUserRole === 'User A';
+          if (isA && remoteData.orbit?.hideUserAOrbit) {
+            setTimeout(() => {
+              alert("⚠️ Your private stargazing Orbit has been remotely hidden by Supriya!");
+            }, 100);
+            const nextA = false;
+            const nextB = remoteData.orbit?.authenticatedUserB ?? remoteData.orbit?.authenticated;
+            return {
+              ...remoteData,
+              currentUser: prev.currentUser,
+              orbit: {
+                ...remoteData.orbit,
+                authenticatedUserA: nextA,
+                authenticated: nextA || nextB,
+                hideUserAOrbit: false,
+              }
+            };
+          } else if (!isA && remoteData.orbit?.hideUserBOrbit) {
+            setTimeout(() => {
+              alert("⚠️ Your private stargazing Orbit has been remotely hidden by Saketh!");
+            }, 100);
+            const nextA = remoteData.orbit?.authenticatedUserA ?? remoteData.orbit?.authenticated;
+            const nextB = false;
+            return {
+              ...remoteData,
+              currentUser: prev.currentUser,
+              orbit: {
+                ...remoteData.orbit,
+                authenticatedUserB: nextB,
+                authenticated: nextA || nextB,
+                hideUserBOrbit: false,
+              }
+            };
+          }
+
+          return {
+            ...remoteData,
+            currentUser: prev.currentUser
+          };
+        });
+      }
+    };
+
+    loadAppwriteData();
+    
+    // Subscribe to real-time state updates
+    const unsubscribeState = subscribeToState('primary_space', (remoteState) => {
+      if (!active) return;
+      
+      setState((prev) => {
+        const remoteData = remoteState as SusaState;
         
         // Remote hide logic
         const isA = activeUserRole === 'User A';
@@ -243,109 +280,48 @@ export const SusaProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setTimeout(() => {
             alert("⚠️ Your private stargazing Orbit has been remotely hidden by Supriya!");
           }, 100);
-          setState((prev) => {
-            const nextA = false;
-            const nextB = prev.orbit?.authenticatedUserB ?? prev.orbit?.authenticated;
-            return {
-              ...prev,
-              orbit: {
-                ...prev.orbit,
-                authenticatedUserA: nextA,
-                authenticated: nextA || nextB,
-                hideUserAOrbit: false,
-              }
-            };
-          });
-          return;
+          const nextA = false;
+          const nextB = remoteData.orbit?.authenticatedUserB ?? remoteData.orbit?.authenticated;
+          return {
+            ...remoteData,
+            currentUser: prev.currentUser,
+            orbit: {
+              ...remoteData.orbit,
+              authenticatedUserA: nextA,
+              authenticated: nextA || nextB,
+              hideUserAOrbit: false,
+            }
+          };
         } else if (!isA && remoteData.orbit?.hideUserBOrbit) {
           setTimeout(() => {
             alert("⚠️ Your private stargazing Orbit has been remotely hidden by Saketh!");
           }, 100);
-          setState((prev) => {
-            const nextA = prev.orbit?.authenticatedUserA ?? prev.orbit?.authenticated;
-            const nextB = false;
-            return {
-              ...prev,
-              orbit: {
-                ...prev.orbit,
-                authenticatedUserB: nextB,
-                authenticated: nextA || nextB,
-                hideUserBOrbit: false,
-              }
-            };
-          });
-          return;
-        }
-
-        setState((current) => {
-          // Compare current vs remote state excluding client-specific currentUser
-          const currentClean = { ...current, currentUser: null };
-          const remoteClean = { ...remoteData, currentUser: null };
-          if (JSON.stringify(currentClean) !== JSON.stringify(remoteClean)) {
-            return {
-              ...remoteData,
-              currentUser: current.currentUser
-            };
-          }
-          return current;
-        });
-      }
-    });
-
-    return () => unsubscribe();
-  }, [activeUserRole]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadSupabaseData = async () => {
-      // Load full orbit state
-      const orbitResult = await loadOrbitStateFromSupabase();
-      if (!active) return;
-      
-      if (!orbitResult.error && orbitResult.orbitState) {
-        setState((prev) => ({
-          ...prev,
-          orbit: {
-            ...prev.orbit,
-            ...orbitResult.orbitState,
-          },
-        }));
-      } else {
-        // Fallback to just loading chat messages if orbit state doesn't exist
-        const chatResult = await loadChatMessagesFromSupabase();
-        if (!active) return;
-        if (!chatResult.error && chatResult.messages.length > 0) {
-          setState((prev) => ({
-            ...prev,
+          const nextA = remoteData.orbit?.authenticatedUserA ?? remoteData.orbit?.authenticated;
+          const nextB = false;
+          return {
+            ...remoteData,
+            currentUser: prev.currentUser,
             orbit: {
-              ...prev.orbit,
-              messages: chatResult.messages,
-            },
-          }));
+              ...remoteData.orbit,
+              authenticatedUserB: nextB,
+              authenticated: nextA || nextB,
+              hideUserBOrbit: false,
+            }
+          };
         }
-      }
-    };
 
-    loadSupabaseData();
-    
-    // Subscribe to real-time orbit state updates
-    const unsubscribeOrbit = subscribeToOrbitState('primary_space', (orbitState) => {
-      if (!active) return;
-      setState((prev) => ({
-        ...prev,
-        orbit: {
-          ...prev.orbit,
-          ...orbitState,
-        },
-      }));
+        return {
+          ...remoteData,
+          currentUser: prev.currentUser
+        };
+      });
     });
 
     return () => {
       active = false;
-      unsubscribeOrbit();
+      unsubscribeState();
     };
-  }, []);
+  }, [activeUserRole]);
 
   const login = (email: string, name: string, avatar?: string) => {
     setState((prev) => ({

@@ -62,7 +62,7 @@ export interface LifeGoal {
 export interface CloudFile {
   id: string;
   name: string;
-  type: 'image' | 'video' | 'audio' | 'pdf' | 'document' | 'sticker' | 'gif';
+  type: 'image' | 'video' | 'audio' | 'pdf' | 'document' | 'sticker' | 'gif' | 'voice' | 'file';
   size: string;
   url: string;
   addedAt: string;

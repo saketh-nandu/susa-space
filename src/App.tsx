@@ -63,7 +63,7 @@ function SusaAppMain() {
       const nameLower = state.currentUser?.name?.toLowerCase() || '';
       const isOwner = nameLower.includes('saketh') || nameLower.includes('supriya');
       if (!isOwner) {
-        alert("⚠️ Unauthorized Access: The private Stargazing Orbit only belongs to the SUSA Founders (Saketh & Supriya). Your entry coordinates have been blocked.");
+        alert("⚠️ Unauthorized Access: The private Stargazing Orbit is restricted. Your entry coordinates have been blocked.");
         setShowPalette(false);
         return;
       }

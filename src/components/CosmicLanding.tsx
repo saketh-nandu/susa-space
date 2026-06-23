@@ -1,14 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSusaStore } from '../store';
-import { auth } from '../firebase';
-import {
-  GoogleAuthProvider,
-  signInWithPopup,
-  signInWithRedirect,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  updateProfile,
-} from 'firebase/auth';
 import {
   Mail, Lock, User, ArrowRight, Sparkles,
   Cpu, Layout, Sliders, Feather,
@@ -32,7 +23,6 @@ export default function CosmicLanding() {
   const [fullName, setFullName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
-  const [showSimulatedGoogle, setShowSimulatedGoogle] = useState(false);
   const [activeInfoTopic, setActiveInfoTopic] = useState<InfoTopic>(null);
 
   // ── Particle canvas background ───────────────────────────────────────────
@@ -68,7 +58,7 @@ export default function CosmicLanding() {
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const g1 = ctx.createRadialGradient(canvas.width * 0.2, canvas.height * 0.3, 0, canvas.width * 0.2, canvas.height * 0.3, canvas.width * 0.5);
-      g1.addColorStop(0, 'rgba(24,16,10,0.4)'); g1.addColorStop(1, 'rgba(6,6,7,0)');
+      g1.addColorStop(0, 'rgba(24,16,11,0.4)'); g1.addColorStop(1, 'rgba(6,6,7,0)');
       ctx.fillStyle = g1; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       particles.forEach((p, i) => {
@@ -95,133 +85,48 @@ export default function CosmicLanding() {
     return () => { window.removeEventListener('resize', resize); window.removeEventListener('mousemove', onMove); cancelAnimationFrame(animId); };
   }, []);
 
-  // ── Auth helpers ─────────────────────────────────────────────────────────
+  // ── Auth helpers ──────────────────────────────────────────────────────────
 
-  /** Map a Firebase user to the SUSA store login — resolves name/avatar from email hints */
-  const loginFromFirebase = (fbEmail: string, displayName: string | null, photoURL: string | null) => {
-    const lower = (displayName || '').toLowerCase();
-    const emailLower = fbEmail.toLowerCase();
-    let name = displayName || fbEmail.split('@')[0];
-    name = name.charAt(0).toUpperCase() + name.slice(1);
-
-    let avatar = photoURL || '';
-    if (!avatar) {
-      if (lower.includes('saketh') || emailLower.includes('saketh') || emailLower.includes('nandusa')) {
-        avatar = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200';
-      } else if (lower.includes('supriya') || emailLower.includes('supriya') || emailLower.includes('srirenu')) {
-        avatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200';
-      } else {
-        avatar = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200';
-      }
-    }
-    login(fbEmail, name, avatar);
-  };
-
-  const handleGoogleAuth = async () => {
-    setIsLoading(true);
-    setMessage(null);
-    const provider = new GoogleAuthProvider();
-    provider.addScope('profile');
-    provider.addScope('email');
-    provider.setCustomParameters({
-      prompt: 'select_account',
-    });
-
-    try {
-      const result = await signInWithPopup(auth, provider);
-      loginFromFirebase(result.user.email!, result.user.displayName, result.user.photoURL);
-    } catch (err: any) {
-      if (
-        err.code === 'auth/popup-blocked' ||
-        err.code === 'auth/cancelled-popup-request' ||
-        err.code === 'auth/popup-closed-by-user'
-      ) {
-        try {
-          await signInWithRedirect(auth, provider);
-        } catch {
-          setShowSimulatedGoogle(true);
-        }
-      } else if (err.code === 'auth/unauthorized-domain') {
-        setMessage({
-          type: 'error',
-          text: 'Please authorize localhost in Firebase Authentication > Settings > Authorized domains.',
-        });
-      } else if (
-        err.code === 'auth/configuration-not-found' ||
-        err.code === 'auth/invalid-api-key' ||
-        err.code === 'auth/network-request-failed'
-      ) {
-        setMessage({
-          type: 'error',
-          text: 'Firebase auth is not fully configured for this local app. Check the Firebase project settings and enabled sign-in methods.',
-        });
-      } else {
-        setMessage({
-          type: 'error',
-          text: err.message || 'Google sign-in failed. Please try again.',
-        });
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleManualAuth = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setMessage(null);
+    
     try {
-      if (authMode === 'signup') {
-        const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
-        const name = fullName.trim() || email.split('@')[0];
-        await updateProfile(cred.user, { displayName: name });
-        loginFromFirebase(cred.user.email!, name, null);
-      } else {
-        // Check if it's an Orbit ID (no @ symbol)
-        if (!email.includes('@')) {
-          // Verify Orbit ID and password (but don't authenticate Orbit)
-          const cleanId = email.trim().toLowerCase();
-          const cleanSecret = password.trim();
-          const isSaketh = cleanId === 'saketh_nandu127' || cleanId === 'saketh';
-          const isSupriya = cleanId === 'srirenu127' || cleanId === 'supriya';
-          const passwordOk = cleanSecret === 'SupriyaSaketh127';
+      // Check if it's an Orbit ID (no @ symbol)
+      if (!email.includes('@')) {
+        // Verify Orbit ID and password
+        const cleanId = email.trim().toLowerCase();
+        const cleanSecret = password.trim();
+        const isSaketh = cleanId === 'saketh_nandu127' || cleanId === 'saketh';
+        const isSupriya = cleanId === 'srirenu127' || cleanId === 'supriya';
+        const passwordOk = cleanSecret === 'SupriyaSaketh127';
 
-          if ((isSaketh || isSupriya) && passwordOk) {
-            // Log in with default SUSA account
-            const defaultEmail = isSaketh ? 'nandusaketh5@gmail.com' : 'supriya@example.com';
-            const defaultName = isSaketh ? 'Saketh' : 'Supriya';
-            const defaultAvatar = isSaketh 
-              ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200'
-              : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200';
-            login(defaultEmail, defaultName, defaultAvatar);
-          } else {
-            setMessage({ type: 'error', text: 'Incorrect Orbit ID or password.' });
-          }
+        if ((isSaketh || isSupriya) && passwordOk) {
+          // Log in with default SUSA account
+          const defaultEmail = isSaketh ? 'nandusaketh5@gmail.com' : 'supriya@example.com';
+          const defaultName = isSaketh ? 'Saketh' : 'Supriya';
+          const defaultAvatar = isSaketh 
+            ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200'
+            : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200';
+          login(defaultEmail, defaultName, defaultAvatar);
         } else {
-          // Regular Firebase email auth
-          const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
-          loginFromFirebase(cred.user.email!, cred.user.displayName, cred.user.photoURL);
+          setMessage({ type: 'error', text: 'Incorrect Orbit ID or password.' });
         }
+      } else {
+        // Simple email login (mock)
+        const name = fullName.trim() || email.split('@')[0];
+        const avatar = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200';
+        login(email, name, avatar);
       }
     } catch (err: any) {
-      const msg: Record<string, string> = {
-        'auth/email-already-in-use': 'That email is already registered. Try logging in instead.',
-        'auth/invalid-email': 'Please enter a valid email address or Orbit ID.',
-        'auth/weak-password': 'Password must be at least 6 characters.',
-        'auth/user-not-found': 'No account found with that email.',
-        'auth/wrong-password': 'Incorrect password.',
-        'auth/invalid-credential': 'Incorrect email, Orbit ID, or password.',
-        'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.',
-        'auth/configuration-not-found': 'Firebase auth is not fully configured for this app.',
-        'auth/unauthorized-domain': 'Please authorize localhost in Firebase Authentication > Settings > Authorized domains.',
-      };
-      setMessage({ type: 'error', text: msg[err.code] || err.message });
+      setMessage({ type: 'error', text: err.message || 'Login failed. Please try again.' });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleMockGoogleSelect = (role: 'saketh' | 'supriya') => {
+  const handleMockSelect = (role: 'saketh' | 'supriya') => {
     setIsLoading(true);
     setTimeout(() => {
       if (role === 'saketh') {
@@ -229,7 +134,6 @@ export default function CosmicLanding() {
       } else {
         login('supriya@example.com', 'Supriya', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200');
       }
-      setShowSimulatedGoogle(false);
       setIsLoading(false);
     }, 800);
   };
@@ -278,7 +182,7 @@ export default function CosmicLanding() {
             {[
               { icon: <Layout className="w-3.5 h-3.5 text-amber-200" />, color: 'bg-yellow-950/20 border-amber-600/20', title: 'Temporal Desk', desc: 'Visual hour blocks, Pomodoro timers, and structured calendars.' },
               { icon: <Feather className="w-3.5 h-3.5 text-indigo-300" />, color: 'bg-indigo-950/20 border-indigo-600/20', title: 'Obsidian Locker', desc: 'Editorial logs, mood index tracking, and file preservation nodes.' },
-              { icon: <Sliders className="w-3.5 h-3.5 text-emerald-300" />, color: 'bg-emerald-950/20 border-emerald-600/20', title: 'Sovereign State', desc: 'Auto-saved Firestore cloud, local-first offline fallback.' },
+              { icon: <Sliders className="w-3.5 h-3.5 text-emerald-300" />, color: 'bg-emerald-950/20 border-emerald-600/20', title: 'Sovereign State', desc: 'Auto-saved Appwrite cloud, local-first offline fallback.' },
             ].map(p => (
               <div key={p.title} className="flex flex-col gap-2.5 p-4 rounded-2xl bg-gradient-to-b from-neutral-900/40 to-transparent border border-neutral-900 hover:border-neutral-800 transition">
                 <div className={`w-7 h-7 rounded-lg border flex items-center justify-center ${p.color}`}>{p.icon}</div>
@@ -314,25 +218,12 @@ export default function CosmicLanding() {
               </div>
             )}
 
-            {/* Google OAuth */}
-            <button onClick={handleGoogleAuth} disabled={isLoading}
-              className="w-full flex items-center justify-center gap-3 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-200 hover:text-white py-3 px-4 rounded-xl text-[11px] font-mono tracking-wider font-medium transition disabled:opacity-50 group cursor-pointer">
-              <svg className="w-4 h-4 text-[#E4C59E] group-hover:rotate-12 transition-transform" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-              </svg>
-              CONTINUE WITH GOOGLE
-            </button>
-
-
             <div className="flex items-center gap-3 text-neutral-600 font-mono text-[9px] uppercase tracking-[0.2em]">
               <span className="flex-1 h-[1px] bg-neutral-900" />OR USE EMAIL<span className="flex-1 h-[1px] bg-neutral-900" />
             </div>
 
             {/* Email / password form */}
-            <form onSubmit={handleManualAuth} className="flex flex-col gap-4 text-[11px] font-mono">
+            <form onSubmit={handleLogin} className="flex flex-col gap-4 text-[11px] font-mono">
               {authMode === 'signup' && (
                 <div className="flex flex-col gap-1.5 text-left">
                   <label className="text-neutral-400 font-medium tracking-wider">YOUR NAME</label>
@@ -385,35 +276,6 @@ export default function CosmicLanding() {
         </div>
       </footer>
 
-      {/* Google iframe fallback */}
-      {showSimulatedGoogle && (
-        <div className="fixed inset-0 bg-neutral-950/85 backdrop-blur-xl z-[20000] flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-neutral-950/90 border border-[#E6D4BE]/25 rounded-3xl p-6 shadow-2xl flex flex-col gap-5 text-center relative">
-            <button onClick={() => setShowSimulatedGoogle(false)} className="absolute top-4 right-4 text-neutral-400 hover:text-white transition">✕</button>
-            <div className="w-11 h-11 rounded-full bg-[#E4C59E]/5 border border-[#E4C59E]/30 flex items-center justify-center mx-auto text-xl">🔑</div>
-            <div className="space-y-1">
-              <h4 className="text-sm font-semibold text-neutral-200 uppercase tracking-widest">Google Popup Blocked</h4>
-              <p className="text-[10.5px] text-neutral-400 leading-normal">
-                Popups are blocked in this environment. Select your account below to continue:
-              </p>
-            </div>
-            <div className="flex flex-col gap-2.5">
-              <button onClick={() => handleMockGoogleSelect('saketh')}
-                className="w-full py-3 px-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-[#E4C59E]/15 hover:border-[#E4C59E]/30 text-left flex items-center gap-3 transition">
-                <div className="w-8 h-8 rounded-full border border-[#E4C59E]/30 bg-[#E4C59E]/5 flex items-center justify-center text-xs font-serif italic text-[#E4C59E] font-bold">α</div>
-                <div><p className="text-xs font-bold text-neutral-100">Saketh's Account</p><p className="text-[9px] text-[#E4C59E]/60 uppercase tracking-widest font-mono">nandusaketh5@gmail.com</p></div>
-              </button>
-              <button onClick={() => handleMockGoogleSelect('supriya')}
-                className="w-full py-3 px-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-indigo-500/15 hover:border-indigo-500/30 text-left flex items-center gap-3 transition">
-                <div className="w-8 h-8 rounded-full border border-indigo-400/30 bg-indigo-950/20 flex items-center justify-center text-xs font-serif italic text-indigo-300 font-bold">β</div>
-                <div><p className="text-xs font-bold text-neutral-100">Supriya's Account</p><p className="text-[9px] text-indigo-400/60 uppercase tracking-widest font-mono">supriya@example.com</p></div>
-              </button>
-            </div>
-            <p className="text-[9px] text-neutral-500 italic">Select an account to authenticate via local workspace keys.</p>
-          </div>
-        </div>
-      )}
-
       {/* Info modals */}
       {activeInfoTopic && (
         <div className="fixed inset-0 bg-neutral-950/85 backdrop-blur-xl z-[20000] flex items-center justify-center p-6">
@@ -422,10 +284,10 @@ export default function CosmicLanding() {
             {activeInfoTopic === 'synapse' && <>
               <div className="text-3xl">🧠</div>
               <div><h4 className="text-base font-serif italic text-neutral-100 font-bold">Synapse Synchronizer Node</h4><p className="text-[11px] text-[#E4C59E]/75 uppercase tracking-widest font-mono mt-1">Real-Time Data Pipeline</p></div>
-              <p className="text-xs text-neutral-400 leading-relaxed font-sans">SUSA's global state layer operates a low-latency reactive link backed by Firestore WebSockets. Changes sync across all devices in under 50ms with local-storage offline fallback.</p>
+              <p className="text-xs text-neutral-400 leading-relaxed font-sans">SUSA's global state layer operates a low-latency reactive link backed by Appwrite Realtime. Changes sync across all devices in under 50ms with local-storage offline fallback.</p>
               <div className="border-t border-neutral-900 pt-4 flex flex-col gap-2 text-[10px] text-neutral-500 font-mono">
                 <div className="flex justify-between"><span>PROPAGATION</span><span className="text-[#E4C59E]">&lt;50ms</span></div>
-                <div className="flex justify-between"><span>BACKEND</span><span className="text-neutral-300">Firestore WebSDK</span></div>
+                <div className="flex justify-between"><span>BACKEND</span><span className="text-neutral-300">Appwrite WebSDK</span></div>
                 <div className="flex justify-between"><span>OFFLINE</span><span className="text-neutral-300">LocalStorage fallback active</span></div>
               </div>
             </>}
@@ -441,11 +303,11 @@ export default function CosmicLanding() {
             {activeInfoTopic === 'core' && <>
               <div className="text-3xl">🛡️</div>
               <div><h4 className="text-base font-serif italic text-neutral-100 font-bold">Encrypted Secure Core</h4><p className="text-[11px] text-red-400 uppercase tracking-widest font-mono mt-1">Privacy-First Architecture</p></div>
-              <p className="text-xs text-neutral-400 leading-relaxed font-sans">Auth via Firebase (Google OAuth 2.0 + email/password). Media stored in Supabase encrypted buckets. No third-party trackers. Orbit is invisible to public users.</p>
+              <p className="text-xs text-neutral-400 leading-relaxed font-sans">Auth via Appwrite, media stored in Appwrite encrypted buckets. No third-party trackers. Orbit is invisible to public users.</p>
               <div className="border-t border-neutral-900 pt-4 flex flex-col gap-2 text-[10px] text-neutral-500 font-mono">
-                <div className="flex justify-between"><span>AUTH</span><span className="text-red-300">Firebase Auth (OAuth 2.0)</span></div>
-                <div className="flex justify-between"><span>STORAGE</span><span className="text-neutral-300">Supabase Encrypted Buckets</span></div>
-                <div className="flex justify-between"><span>FIRESTORE</span><span className="text-neutral-300">TLS 1.3 Rules</span></div>
+                <div className="flex justify-between"><span>AUTH</span><span className="text-red-300">Appwrite Auth</span></div>
+                <div className="flex justify-between"><span>STORAGE</span><span className="text-neutral-300">Appwrite Encrypted Buckets</span></div>
+                <div className="flex justify-between"><span>DATABASE</span><span className="text-neutral-300">Appwrite Databases</span></div>
               </div>
             </>}
             <button onClick={() => setActiveInfoTopic(null)}

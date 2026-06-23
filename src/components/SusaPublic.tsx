@@ -8,7 +8,7 @@ import {
   Clock, Heart, FileText, Check, Award, Send, RefreshCw, LogOut, Upload
 } from 'lucide-react';
 import SusaLogo from './SusaLogo';
-import { uploadToSupabase } from '../supabase';
+import { uploadToAppwrite } from '../appwrite';
 
 export default function SusaPublic() {
   const {
@@ -145,7 +145,7 @@ export default function SusaPublic() {
     const file = e.dataTransfer.files[0];
     if (!file.type.startsWith('image/')) { alert('Please drop a valid image file.'); return; }
 
-    const result = await uploadToSupabase(file, 'avatars');
+    const result = await uploadToAppwrite(file, 'avatars');
     if (result.error) {
       const reader = new FileReader();
       reader.onload = () => { if (typeof reader.result === 'string') setEditProfileAvatar(reader.result); };
@@ -160,7 +160,7 @@ export default function SusaPublic() {
     const file = e.target.files[0];
     if (!file.type.startsWith('image/')) return;
 
-    const result = await uploadToSupabase(file, 'avatars');
+    const result = await uploadToAppwrite(file, 'avatars');
     if (result.error) {
       const reader = new FileReader();
       reader.onload = () => { if (typeof reader.result === 'string') setEditProfileAvatar(reader.result); };
@@ -179,7 +179,7 @@ export default function SusaPublic() {
     setLockerFileSize(`${(file.size / (1024 * 1024)).toFixed(1)} MB`);
     setFileInputType(file.type.startsWith('image/') ? 'image' : file.type === 'application/pdf' ? 'pdf' : 'document');
 
-    const result = await uploadToSupabase(file, 'gallery');
+    const result = await uploadToAppwrite(file, 'gallery');
     if (result.error) {
       // Fall back to base64 data URL when Supabase isn't configured
       const reader = new FileReader();
@@ -197,7 +197,7 @@ export default function SusaPublic() {
     setLockerFileSize(`${(file.size / (1024 * 1024)).toFixed(1)} MB`);
     setFileInputType(file.type.startsWith('image/') ? 'image' : file.type === 'application/pdf' ? 'pdf' : 'document');
 
-    const result = await uploadToSupabase(file, 'gallery');
+    const result = await uploadToAppwrite(file, 'gallery');
     if (result.error) {
       const reader = new FileReader();
       reader.onload = () => { if (typeof reader.result === 'string') setLockerFileBase64(reader.result); };

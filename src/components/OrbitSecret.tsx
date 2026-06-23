@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ChatMessage, OrbitMemory, FutureItem, IslandStructure } from '../types';
 import ThreeDDog from './ThreeDDog';
 import NovaPet from './NovaPet';
-import { uploadToSupabase } from '../supabase';
+import { uploadToAppwrite } from '../appwrite';
 import {
   MessageSquare, Image, Star, Compass, Activity, Bell, Shield, MapPin,
   Hourglass, Music, Sliders, Palette, LogOut, ArrowLeft, Send, Sparkles,
@@ -164,7 +164,7 @@ export default function OrbitSecret() {
     setSelectedFile(file);
     const fileType = getFileType(file);
     
-    const result = await uploadToSupabase(file, 'chat');
+    const result = await uploadToAppwrite(file, 'chat');
     if (result.error) {
       // Supabase not configured — use local data URL as fallback
       const reader = new FileReader();
@@ -236,6 +236,7 @@ export default function OrbitSecret() {
   // Ambient Room Overlay States
   const [ambientRoom, setAmbientRoom] = useState<'none' | 'rain' | 'forest' | 'space'>('none');
   const [ambientAudioActive, setAmbientAudioActive] = useState(false);
+  const [fullscreenMedia, setFullscreenMedia] = useState<{url: string, type: 'image' | 'video', name?: string} | null>(null);
 
   // Chat message attachments state
   const [typedMessage, setTypedMessage] = useState('');
@@ -407,7 +408,7 @@ export default function OrbitSecret() {
   // Load storage usage when settings tab opens
   const loadStorageUsage = async () => {
     setIsLoadingStorage(true);
-    const { calculateStorageUsage } = await import('../supabase');
+    const { calculateStorageUsage } = await import('../appwrite');
     const { totalMB, error } = await calculateStorageUsage();
     if (!error) {
       setStorageUsed(totalMB);
@@ -658,7 +659,7 @@ export default function OrbitSecret() {
       setUploadProgress(cur);
     }, 150);
 
-    const result = await uploadToSupabase(file, 'memories');
+    const result = await uploadToAppwrite(file, 'memories');
     clearInterval(progressInterval);
 
     if (result.error) {
@@ -1585,7 +1586,12 @@ export default function OrbitSecret() {
                           {/* Image file and reply quote */}
                           {m.type === 'image' && (
                             <div className="flex flex-col gap-2">
-                              <img src={m.fileUrl} alt="shared asset" className="rounded-xl border border-stone-200 size-full object-cover max-h-40 md:max-h-48" />
+                              <img 
+                                src={m.fileUrl} 
+                                alt="shared asset" 
+                                className="rounded-xl border border-stone-200 size-full object-cover max-h-40 md:max-h-48 cursor-pointer hover:opacity-90 transition" 
+                                onClick={() => setFullscreenMedia({url: m.fileUrl, type: 'image', name: m.fileName})}
+                              />
                               <p className="italic text-[10px] md:text-[11px] text-stone-500 mt-1">{m.fileName} ({m.fileSize})</p>
                             </div>
                           )}
@@ -1593,7 +1599,12 @@ export default function OrbitSecret() {
                           {/* Video file */}
                           {m.type === 'video' && (
                             <div className="flex flex-col gap-2">
-                              <video controls src={m.fileUrl} className="rounded-xl border border-stone-200 size-full max-h-60 md:max-h-80" />
+                              <div 
+                                className="rounded-xl border border-stone-200 size-full max-h-60 md:max-h-80 overflow-hidden cursor-pointer hover:opacity-90 transition"
+                                onClick={() => setFullscreenMedia({url: m.fileUrl, type: 'video', name: m.fileName})}
+                              >
+                                <video src={m.fileUrl} className="w-full h-full object-cover" />
+                              </div>
                               <p className="italic text-[10px] md:text-[11px] text-stone-500 mt-1">{m.fileName} ({m.fileSize})</p>
                             </div>
                           )}
@@ -1835,10 +1846,10 @@ export default function OrbitSecret() {
                     onChange={(e) => setTypedMessage(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
-                        const fileDetails = selectedFile ? {
-                          name: selectedFile.name,
+                        const fileDetails = chatFileUrl ? {
+                          name: selectedFile?.name || 'GIF',
                           url: chatFileUrl,
-                          size: (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB'
+                          size: selectedFile ? (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'
                         } : undefined;
                         sendOrbitMessage(typedMessage, chatFileType, fileDetails);
                         setTypedMessage('');
@@ -1851,10 +1862,10 @@ export default function OrbitSecret() {
                   
                   <button 
                     onClick={() => {
-                      const fileDetails = selectedFile ? {
-                        name: selectedFile.name,
+                      const fileDetails = chatFileUrl ? {
+                        name: selectedFile?.name || 'GIF',
                         url: chatFileUrl,
-                        size: (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB'
+                        size: selectedFile ? (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'
                       } : undefined;
                       sendOrbitMessage(typedMessage, chatFileType, fileDetails);
                       setTypedMessage('');
@@ -1961,15 +1972,20 @@ export default function OrbitSecret() {
                       <img 
                         src={file.url.startsWith('http') ? file.url : 'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?auto=format&fit=crop&q=80&w=400'} 
                         alt={file.name} 
-                        className="w-full h-40 object-cover group-hover:scale-103 transition duration-500"
+                        className="w-full h-40 object-cover group-hover:scale-103 transition duration-500 cursor-pointer hover:opacity-90"
+                        onClick={() => setFullscreenMedia({url: file.url, type: 'image', name: file.name})}
                       />
                     )}
                     {file.type === 'video' && (
-                      <video 
-                        src={file.url} 
-                        className="w-full h-40 object-cover group-hover:scale-103 transition duration-500"
-                        controls
-                      />
+                      <div 
+                        className="w-full h-40 overflow-hidden cursor-pointer hover:opacity-90"
+                        onClick={() => setFullscreenMedia({url: file.url, type: 'video', name: file.name})}
+                      >
+                        <video 
+                          src={file.url} 
+                          className="w-full h-full object-cover group-hover:scale-103 transition duration-500"
+                        />
+                      </div>
                     )}
                     {file.type === 'voice' && (
                       <div className="w-full h-40 bg-stone-100 flex items-center justify-center">
@@ -2006,15 +2022,20 @@ export default function OrbitSecret() {
                       <img 
                         src={msg.fileUrl} 
                         alt={msg.fileName || 'Chat image'} 
-                        className="w-full h-40 object-cover group-hover:scale-103 transition duration-500"
+                        className="w-full h-40 object-cover group-hover:scale-103 transition duration-500 cursor-pointer hover:opacity-90"
+                        onClick={() => setFullscreenMedia({url: msg.fileUrl, type: 'image', name: msg.fileName})}
                       />
                     )}
                     {msg.type === 'video' && (
-                      <video 
-                        src={msg.fileUrl} 
-                        className="w-full h-40 object-cover group-hover:scale-103 transition duration-500"
-                        controls
-                      />
+                      <div 
+                        className="w-full h-40 overflow-hidden cursor-pointer hover:opacity-90"
+                        onClick={() => setFullscreenMedia({url: msg.fileUrl, type: 'video', name: msg.fileName})}
+                      >
+                        <video 
+                          src={msg.fileUrl} 
+                          className="w-full h-full object-cover group-hover:scale-103 transition duration-500"
+                        />
+                      </div>
                     )}
                     {msg.type === 'voice' && (
                       <div className="w-full h-40 bg-stone-100 flex items-center justify-center">
@@ -3456,25 +3477,25 @@ export default function OrbitSecret() {
                     )}
                   </div>
 
-                  {/* Supabase Technical Configuration Guides */}
+                  {/* Appwrite Technical Configuration Guides */}
                   <div className="bg-white border border-[#E5E1D8] p-6 rounded-[32px] shadow-sm flex flex-col gap-4">
                     <div>
                       <h3 className="font-serif text-base font-bold text-stone-850">Cloud Integration Credentials</h3>
-                      <p className="text-xs text-stone-500 mt-1">Current Supabase configuration from environment variables.</p>
+                      <p className="text-xs text-stone-500 mt-1">Current Appwrite configuration from environment variables.</p>
                     </div>
 
                     <div className="flex flex-col gap-3 text-xs">
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] font-mono font-bold text-stone-450">SUPABASE_PROJECT_URL</label>
+                        <label className="text-[10px] font-mono font-bold text-stone-450">APPWRITE_ENDPOINT</label>
                         <div className="bg-stone-50 border border-stone-200 rounded-xl p-2.5 font-mono text-stone-605 select-all truncate">
-                          {import.meta.env.VITE_SUPABASE_URL || 'Not configured'}
+                          {import.meta.env.VITE_APPWRITE_ENDPOINT || 'Not configured'}
                         </div>
                       </div>
 
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] font-mono font-bold text-stone-450">SUPABASE_ANON_KEY (CLIENT PUBLIC KEY)</label>
+                        <label className="text-[10px] font-mono font-bold text-stone-450">APPWRITE_PROJECT_ID</label>
                         <div className="bg-stone-50 border border-stone-200 rounded-xl p-2.5 font-mono text-stone-605 select-all truncate">
-                          {import.meta.env.VITE_SUPABASE_ANON_KEY ? import.meta.env.VITE_SUPABASE_ANON_KEY.slice(0, 50) + '...' : 'Not configured'}
+                          {import.meta.env.VITE_APPWRITE_PROJECT_ID || 'Not configured'}
                         </div>
                       </div>
                     </div>
@@ -3776,6 +3797,46 @@ export default function OrbitSecret() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* FULLSCREEN MEDIA VIEWER */}
+      {fullscreenMedia && (
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+          <button
+            onClick={() => setFullscreenMedia(null)}
+            className="absolute top-6 right-6 text-white bg-black/50 hover:bg-black/70 rounded-full p-2 transition"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+          {fullscreenMedia.type === 'image' && (
+            <img
+              src={fullscreenMedia.url}
+              alt={fullscreenMedia.name || 'Fullscreen image'}
+              className="max-w-full max-h-full object-contain"
+            />
+          )}
+          {fullscreenMedia.type === 'video' && (
+            <video
+              src={fullscreenMedia.url}
+              className="max-w-full max-h-full"
+              controls
+              autoPlay
+            />
+          )}
         </div>
       )}
     </div>
