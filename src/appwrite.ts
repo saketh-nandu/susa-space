@@ -121,11 +121,12 @@ export async function calculateStorageUsage(): Promise<{ totalMB: number; error?
 export async function saveStateToAppwrite(state: any, spaceId = 'primary_space'): Promise<{ error?: string }> {
   try {
     console.log('[Appwrite State Save] Creating document with ID:', spaceId);
+    const stateString = JSON.stringify(state);
     await databases.createDocument(
       DATABASE_ID,
       COLLECTION_SPACES,
       spaceId,
-      { data: state }
+      { state: stateString }
     );
     console.log('[Appwrite State Save] Document created successfully!');
     return {};
@@ -135,11 +136,12 @@ export async function saveStateToAppwrite(state: any, spaceId = 'primary_space')
     if (error.code === 409) {
       try {
         console.log('[Appwrite State Save] Document exists, updating...');
+        const stateString = JSON.stringify(state);
         await databases.updateDocument(
           DATABASE_ID,
           COLLECTION_SPACES,
           spaceId,
-          { data: state }
+          { state: stateString }
         );
         console.log('[Appwrite State Save] Document updated successfully!');
         return {};
@@ -162,7 +164,8 @@ export async function loadStateFromAppwrite(spaceId = 'primary_space'): Promise<
       COLLECTION_SPACES,
       spaceId
     );
-    return { state: doc.data };
+    const state = JSON.parse(doc.state);
+    return { state };
   } catch (error: any) {
     return { state: null, error: error.message };
   }
@@ -184,7 +187,12 @@ export function subscribeToState(
         (response) => {
           if (response.events.includes('databases.*.documents.*.update') || 
               response.events.includes('databases.*.documents.*.create')) {
-            callback(response.payload.data);
+            try {
+              const state = JSON.parse(response.payload.state);
+              callback(state);
+            } catch (e) {
+              console.error('[Appwrite Realtime] Parse error:', e);
+            }
           }
         }
       );
