@@ -1,4 +1,4 @@
-import { Client, Databases, Storage, Account, Realtime, ID } from 'appwrite';
+import { Client, Databases, Storage, Account, Realtime, ID, TablesDB } from 'appwrite';
 import type { ChatMessage, OrbitState } from './types';
 
 // Initialize Appwrite client
@@ -11,13 +11,13 @@ client
 
 // Initialize Appwrite services
 export const account = new Account(client);
-export const databases = new Databases(client);
+export const tablesDB = new TablesDB(client);
 export const storage = new Storage(client);
 export const realtime = new Realtime(client);
 
 // Database and collection IDs (your specific IDs)
 export const DATABASE_ID = '6a3a5935001b389ccd3b';
-export const COLLECTION_SPACES = 'spaces';
+export const TABLE_SPACES = 'spaces';
 
 // Storage bucket ID (your specific bucket)
 export const BUCKET_ID = '6a3a594a0018f9b4876e';
@@ -120,30 +120,30 @@ export async function calculateStorageUsage(): Promise<{ totalMB: number; error?
  */
 export async function saveStateToAppwrite(state: any, spaceId = 'primary_space'): Promise<{ error?: string }> {
   try {
-    console.log('[Appwrite State Save] Creating document with ID:', spaceId);
+    console.log('[Appwrite State Save] Creating row with ID:', spaceId);
     const stateString = JSON.stringify(state);
-    await databases.createDocument(
+    await tablesDB.createRow(
       DATABASE_ID,
-      COLLECTION_SPACES,
+      TABLE_SPACES,
       spaceId,
       { state: stateString }
     );
-    console.log('[Appwrite State Save] Document created successfully!');
+    console.log('[Appwrite State Save] Row created successfully!');
     return {};
   } catch (error: any) {
     console.error('[Appwrite State Save] Error:', error);
-    // If document already exists, update it
+    // If row already exists, update it
     if (error.code === 409) {
       try {
-        console.log('[Appwrite State Save] Document exists, updating...');
+        console.log('[Appwrite State Save] Row exists, updating...');
         const stateString = JSON.stringify(state);
-        await databases.updateDocument(
+        await tablesDB.updateRow(
           DATABASE_ID,
-          COLLECTION_SPACES,
+          TABLE_SPACES,
           spaceId,
           { state: stateString }
         );
-        console.log('[Appwrite State Save] Document updated successfully!');
+        console.log('[Appwrite State Save] Row updated successfully!');
         return {};
       } catch (updateError: any) {
         console.error('[Appwrite State Save] Update error:', updateError);
@@ -159,12 +159,12 @@ export async function saveStateToAppwrite(state: any, spaceId = 'primary_space')
  */
 export async function loadStateFromAppwrite(spaceId = 'primary_space'): Promise<{ state: any; error?: string }> {
   try {
-    const doc = await databases.getDocument(
+    const row = await tablesDB.getRow(
       DATABASE_ID,
-      COLLECTION_SPACES,
+      TABLE_SPACES,
       spaceId
     );
-    const state = JSON.parse(doc.state);
+    const state = JSON.parse(row.state);
     return { state };
   } catch (error: any) {
     return { state: null, error: error.message };
@@ -183,10 +183,10 @@ export function subscribeToState(
   (async () => {
     try {
       const subscription = await realtime.subscribe(
-        `databases.${DATABASE_ID}.collections.${COLLECTION_SPACES}.documents.${spaceId}`,
+        `databases.${DATABASE_ID}.tables.${TABLE_SPACES}.rows.${spaceId}`,
         (response) => {
-          if (response.events.includes('databases.*.documents.*.update') || 
-              response.events.includes('databases.*.documents.*.create')) {
+          if (response.events.includes('databases.*.tables.*.rows.*.update') || 
+              response.events.includes('databases.*.tables.*.rows.*.create')) {
             try {
               const state = JSON.parse(response.payload.state);
               callback(state);
