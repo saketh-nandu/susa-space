@@ -12,9 +12,9 @@ export default defineConfig(() => {
       },
     },
     server: {
-      port: 3000,
+      port: 3001,
       hmr: {
-        port: 24679,
+        port: 24680,
       },
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
