@@ -145,33 +145,38 @@ export async function saveStateToAppwrite(
         continue;
       }
       
-      // If update failed for other reason (like 404 row not found), try create
-      console.log(`[Appwrite State Save] Attempt ${attempt}/${maxRetries}: Update failed, trying create...`);
-      try {
-        await tablesDB.createRow(
-          DATABASE_ID,
-          TABLE_SPACES,
-          spaceId,
-          { state: stateString }
-        );
-        console.log('[Appwrite State Save] Row created successfully!');
-        return {};
-      } catch (createErr: any) {
-        // If 409 (already exists), just try update again
-        if (createErr.code === 409) {
-          console.log(`[Appwrite State Save] Attempt ${attempt}/${maxRetries}: Create failed with 409, retrying update...`);
-          continue;
+      // Only try create if update error is 404 (row not found)
+      if (updateErr.code === 404) {
+        console.log(`[Appwrite State Save] Attempt ${attempt}/${maxRetries}: Row not found, trying create...`);
+        try {
+          await tablesDB.createRow(
+            DATABASE_ID,
+            TABLE_SPACES,
+            spaceId,
+            { state: stateString }
+          );
+          console.log('[Appwrite State Save] Row created successfully!');
+          return {};
+        } catch (createErr: any) {
+          // If 409 (already exists), just try update again
+          if (createErr.code === 409) {
+            console.log(`[Appwrite State Save] Attempt ${attempt}/${maxRetries}: Create failed with 409, retrying update...`);
+            continue;
+          }
+          // If 429, retry
+          if (createErr.code === 429 && attempt < maxRetries) {
+            const delay = 1000 * attempt;
+            console.warn(`[Appwrite State Save] 429 Too Many Requests - retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+          console.error('[Appwrite State Save] Create failed:', createErr);
+          return { error: createErr.message };
         }
-        // If 429, retry
-        if (createErr.code === 429 && attempt < maxRetries) {
-          const delay = 1000 * attempt;
-          console.warn(`[Appwrite State Save] 429 Too Many Requests - retrying in ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          continue;
-        }
-        console.error('[Appwrite State Save] Create failed:', createErr);
-        return { error: createErr.message };
       }
+      
+      console.error('[Appwrite State Save] Update failed:', updateErr);
+      return { error: updateErr.message };
     }
   }
   
