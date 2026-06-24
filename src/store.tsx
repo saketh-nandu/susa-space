@@ -1103,7 +1103,6 @@ export const SusaProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
       };
     });
-    alert("🌌 Remote hide command initialized. Partner's Orbit visibility locked, and you've exited to public SUSA Space!");
   };
 
   const simulatePartnerMessage = (presetText?: string) => {

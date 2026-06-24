@@ -60,8 +60,6 @@
             "outputDirectory": "./dist",
             "fallbackFile": "index.html",
             "startCommand": "",
-            "buildSpecification": "s-0.5vcpu-512mb",
-            "runtimeSpecification": "s-0.5vcpu-512mb",
             "deploymentRetention": 0
         }
     ],
