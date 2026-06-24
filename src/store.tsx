@@ -215,24 +215,52 @@ export const SusaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearInterval(interval);
   }, [state.currentUser?.name]);
 
+  const [lastSavedStateString, setLastSavedStateString] = useState<string>('');
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  
+  // When user logs in, load state from Appwrite
+  useEffect(() => {
+    const isCurrentLoggedIn = !!state.currentUser;
+    if (isCurrentLoggedIn && !isLoggedIn) {
+      setIsLoggedIn(true);
+      // Reset lastSaved to force a sync
+      setLastSavedStateString('');
+    }
+    if (!isCurrentLoggedIn && isLoggedIn) {
+      setIsLoggedIn(false);
+    }
+  }, [state.currentUser, isLoggedIn]);
+  
   // Save state on change and sync to Appwrite
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     
+    // Only sync to Appwrite if user is logged in
+    if (!isLoggedIn) return;
+    
+    const currentStateString = JSON.stringify(state);
+    // Only proceed if state actually changed from last saved
+    if (currentStateString === lastSavedStateString) return;
+
     const syncToAppwrite = async () => {
       try {
-        const cleanState = JSON.parse(JSON.stringify(state));
+        const cleanState = JSON.parse(currentStateString);
         await saveStateToAppwrite(cleanState);
+        setLastSavedStateString(currentStateString);
       } catch (err) {
         console.error("[Appwrite] Sync failed:", err);
       }
     };
 
-    syncToAppwrite();
-  }, [state]);
+    // Debounce: wait 500ms after last change before saving
+    const timeoutId = setTimeout(syncToAppwrite, 500);
+    return () => clearTimeout(timeoutId);
+  }, [state, lastSavedStateString, isLoggedIn]);
 
   // Listen to Appwrite updates
   useEffect(() => {
+    if (!isLoggedIn) return;
+    
     let active = true;
 
     const loadAppwriteData = async () => {
@@ -285,6 +313,8 @@ export const SusaProvider: React.FC<{ children: React.ReactNode }> = ({ children
             currentUser: prev.currentUser
           };
         });
+        // After loading remote state, update last saved to prevent overwriting
+        setLastSavedStateString(JSON.stringify(result.state));
       }
     };
 
@@ -344,7 +374,7 @@ export const SusaProvider: React.FC<{ children: React.ReactNode }> = ({ children
       active = false;
       unsubscribeState();
     };
-  }, [activeUserRole]);
+  }, [activeUserRole, isLoggedIn]);
 
   const login = (email: string, name: string, avatar?: string) => {
     setState((prev) => ({
@@ -1059,18 +1089,21 @@ export const SusaProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const triggerRemoteHide = () => {
     setState((prev) => {
       const isA = activeUserRole === 'User A';
-      // If I am Saketh (A), I hide Supriya's (B) private orbit remotely.
-      // If I am Supriya (B), I hide Saketh's (A) private orbit remotely.
+      // If I am Saketh (A), I hide Supriya's (B) private orbit remotely, and exit my own.
+      // If I am Supriya (B), I hide Saketh's (A) private orbit remotely, and exit my own.
       return {
         ...prev,
         orbit: { 
           ...prev.orbit,
           hideUserBOrbit: isA ? true : prev.orbit.hideUserBOrbit,
           hideUserAOrbit: !isA ? true : prev.orbit.hideUserAOrbit,
+          authenticatedUserA: isA ? false : prev.orbit.authenticatedUserA,
+          authenticatedUserB: !isA ? false : prev.orbit.authenticatedUserB,
+          authenticated: false,
         },
       };
     });
-    alert("🌌 Remote hide command initialized. Partner's Orbit stargazing visibility has been locked!");
+    alert("🌌 Remote hide command initialized. Partner's Orbit visibility locked, and you've exited to public SUSA Space!");
   };
 
   const simulatePartnerMessage = (presetText?: string) => {

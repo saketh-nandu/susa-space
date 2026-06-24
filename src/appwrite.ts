@@ -1,4 +1,5 @@
 import { Client, Databases, Storage, Account, Realtime, ID, TablesDB } from 'appwrite';
+import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, DATABASE_ID, STORAGE_BUCKETS } from './lib/appwrite/config';
 import type { ChatMessage, OrbitState } from './types';
 
 // Initialize Appwrite client
@@ -6,21 +7,19 @@ const client = new Client();
 
 // Configure Appwrite client with your specific credentials
 client
-  .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://sgp.cloud.appwrite.io/v1')
-  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || '6a3a52fb001e5b3afa82');
+  .setEndpoint(APPWRITE_ENDPOINT)
+  .setProject(APPWRITE_PROJECT_ID);
 
 // Initialize Appwrite services
 export const account = new Account(client);
 export const tablesDB = new TablesDB(client);
+export const databases = new Databases(client);
 export const storage = new Storage(client);
 export const realtime = new Realtime(client);
 
 // Database and collection IDs (your specific IDs)
-export const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || '6a3a5935001b389ccd3b';
 export const TABLE_SPACES = 'spaces';
-
-// Storage bucket ID (your specific bucket)
-export const BUCKET_ID = import.meta.env.VITE_APPWRITE_BUCKET_ID || '6a3a594a0018f9b4876e';
+const BUCKET_ID = STORAGE_BUCKETS.MEDIA;
 
 // Storage helpers
 export interface UploadResult {
@@ -118,40 +117,65 @@ export async function calculateStorageUsage(): Promise<{ totalMB: number; error?
 /**
  * Persist full state to Appwrite
  */
-export async function saveStateToAppwrite(state: any, spaceId = 'primary_space'): Promise<{ error?: string }> {
-  try {
-    console.log('[Appwrite State Save] Creating row with ID:', spaceId);
-    const stateString = JSON.stringify(state);
-    await tablesDB.createRow(
-      DATABASE_ID,
-      TABLE_SPACES,
-      spaceId,
-      { state: stateString }
-    );
-    console.log('[Appwrite State Save] Row created successfully!');
-    return {};
-  } catch (error: any) {
-    console.error('[Appwrite State Save] Error:', error);
-    // If row already exists, update it
-    if (error.code === 409) {
+export async function saveStateToAppwrite(
+  state: any, 
+  spaceId = 'primary_space',
+  maxRetries = 3
+): Promise<{ error?: string }> {
+  const stateString = JSON.stringify(state);
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // First, try to update
+      console.log(`[Appwrite State Save] Attempt ${attempt}/${maxRetries}: Updating row with ID:`, spaceId);
+      await tablesDB.updateRow(
+        DATABASE_ID,
+        TABLE_SPACES,
+        spaceId,
+        { state: stateString }
+      );
+      console.log('[Appwrite State Save] Row updated successfully!');
+      return {};
+    } catch (updateErr: any) {
+      // If 429, retry
+      if (updateErr.code === 429 && attempt < maxRetries) {
+        const delay = 1000 * attempt;
+        console.warn(`[Appwrite State Save] 429 Too Many Requests - retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      // If update failed for other reason (like 404 row not found), try create
+      console.log(`[Appwrite State Save] Attempt ${attempt}/${maxRetries}: Update failed, trying create...`);
       try {
-        console.log('[Appwrite State Save] Row exists, updating...');
-        const stateString = JSON.stringify(state);
-        await tablesDB.updateRow(
+        await tablesDB.createRow(
           DATABASE_ID,
           TABLE_SPACES,
           spaceId,
           { state: stateString }
         );
-        console.log('[Appwrite State Save] Row updated successfully!');
+        console.log('[Appwrite State Save] Row created successfully!');
         return {};
-      } catch (updateError: any) {
-        console.error('[Appwrite State Save] Update error:', updateError);
-        return { error: updateError.message };
+      } catch (createErr: any) {
+        // If 409 (already exists), just try update again
+        if (createErr.code === 409) {
+          console.log(`[Appwrite State Save] Attempt ${attempt}/${maxRetries}: Create failed with 409, retrying update...`);
+          continue;
+        }
+        // If 429, retry
+        if (createErr.code === 429 && attempt < maxRetries) {
+          const delay = 1000 * attempt;
+          console.warn(`[Appwrite State Save] 429 Too Many Requests - retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        console.error('[Appwrite State Save] Create failed:', createErr);
+        return { error: createErr.message };
       }
     }
-    return { error: error.message };
   }
+  
+  return { error: 'Failed to save state after multiple retries' };
 }
 
 /**

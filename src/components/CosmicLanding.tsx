@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSusaStore } from '../store';
 import { account } from '../appwrite';
+import { OAuthProvider } from 'appwrite';
 import {
   Mail, Lock, User, ArrowRight, Sparkles,
   Cpu, Layout, Sliders, Feather,
@@ -91,7 +92,7 @@ export default function CosmicLanding() {
   const handleGoogleLogin = async () => {
     try {
       await account.createOAuth2Session(
-        'google',
+        OAuthProvider.Google,
         window.location.origin,
         window.location.origin
       );
@@ -106,33 +107,87 @@ export default function CosmicLanding() {
     setMessage(null);
     
     try {
+      // First, check if we're already logged in - if yes, log out first
+      try {
+        await account.get();
+        await account.deleteSession('current');
+      } catch (err) {
+        // No active session, which is fine
+      }
+
       // Check if it's an Orbit ID (no @ symbol)
       if (!email.includes('@')) {
-        // Verify Orbit ID and password
+        // Validate Orbit ID and password (these are fixed IDs)
         const cleanId = email.trim().toLowerCase();
         const cleanSecret = password.trim();
         const isSaketh = cleanId === 'saketh_nandu127' || cleanId === 'saketh';
         const isSupriya = cleanId === 'srirenu127' || cleanId === 'supriya';
         const passwordOk = cleanSecret === 'SupriyaSaketh127';
 
-        if ((isSaketh || isSupriya) && passwordOk) {
-          // Log in with default SUSA account
-          const defaultEmail = isSaketh ? 'nandusaketh5@gmail.com' : 'supriya@example.com';
-          const defaultName = isSaketh ? 'Saketh' : 'Supriya';
-          const defaultAvatar = isSaketh 
-            ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200'
-            : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200';
-          login(defaultEmail, defaultName, defaultAvatar);
-        } else {
+        if (!(isSaketh || isSupriya) || !passwordOk) {
           setMessage({ type: 'error', text: 'Incorrect Orbit ID or password.' });
+          setIsLoading(false);
+          return;
         }
+
+        // Determine the corresponding email for Appwrite login
+        const appwriteEmail = isSaketh ? 'saketh@example.com' : 'supriya@example.com';
+        const userName = isSaketh ? 'Saketh' : 'Supriya';
+        
+        // Try to log in to Appwrite first
+        try {
+          await account.createEmailPasswordSession(appwriteEmail, password);
+        } catch (loginErr: any) {
+          // If login fails because user doesn't exist, create them first
+          if (loginErr.code === 401 || loginErr.type === 'user_invalid_credentials') {
+            try {
+              await account.create('unique()', appwriteEmail, password, userName);
+              // Now login with the new user
+              await account.createEmailPasswordSession(appwriteEmail, password);
+            } catch (createErr: any) {
+              // If user already exists (409), just try to log in again
+              if (createErr.code === 409 || createErr.message.includes('already exists')) {
+                await account.createEmailPasswordSession(appwriteEmail, password);
+              } else {
+                throw createErr;
+              }
+            }
+          } else {
+            throw loginErr;
+          }
+        }
+
+        // Get user info from Appwrite
+        const user = await account.get();
+        login(user.email, user.name || userName);
       } else {
-        // Simple email login (mock)
-        const name = fullName.trim() || email.split('@')[0];
-        const avatar = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200';
-        login(email, name, avatar);
+        // Normal email login
+        try {
+          await account.createEmailPasswordSession(email, password);
+        } catch (loginErr: any) {
+          // If user doesn't exist and we're in signup mode, create them
+          if (authMode === 'signup' && (loginErr.code === 401 || loginErr.type === 'user_invalid_credentials')) {
+            try {
+              await account.create('unique()', email, password, fullName || email.split('@')[0]);
+              await account.createEmailPasswordSession(email, password);
+            } catch (createErr: any) {
+              // If user already exists (409), just try to log in again
+              if (createErr.code === 409 || createErr.message.includes('already exists')) {
+                await account.createEmailPasswordSession(email, password);
+              } else {
+                throw createErr;
+              }
+            }
+          } else {
+            throw loginErr;
+          }
+        }
+        
+        const user = await account.get();
+        login(user.email, user.name || email.split('@')[0]);
       }
     } catch (err: any) {
+      console.error('Login error:', err);
       setMessage({ type: 'error', text: err.message || 'Login failed. Please try again.' });
     } finally {
       setIsLoading(false);
