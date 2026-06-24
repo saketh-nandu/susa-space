@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { saveStateToAppwrite, loadStateFromAppwrite, subscribeToState } from './appwrite';
+import { saveStateToAppwrite, loadStateFromAppwrite, subscribeToState, account } from './appwrite';
 import {
   SusaState,
   PublicNote,
@@ -161,6 +161,29 @@ export const SusaProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
   }, [state.currentUser]);
+
+  // Check Appwrite auth session on startup
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const session = await account.get();
+        // If session exists, log in the user
+        setState((prev) => ({
+          ...prev,
+          currentUser: {
+            email: session.email,
+            name: session.name || session.email.split('@')[0],
+            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(session.name || session.email)}&background=random&color=fff&size=128`,
+          }
+        }));
+      } catch (err) {
+        // No active session, do nothing
+        console.log('No active Appwrite session');
+      }
+    };
+    
+    checkAuth();
+  }, []);
 
   // Heartbeat presence tracker for Saketh and Supriya
   useEffect(() => {

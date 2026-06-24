@@ -6,8 +6,8 @@ const client = new Client();
 
 // Configure Appwrite client with your specific credentials
 client
-  .setEndpoint('https://sgp.cloud.appwrite.io/v1') // Your Singapore endpoint
-  .setProject('6a3a52fb001e5b3afa82'); // Your project ID
+  .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://sgp.cloud.appwrite.io/v1')
+  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || '6a3a52fb001e5b3afa82');
 
 // Initialize Appwrite services
 export const account = new Account(client);
@@ -16,11 +16,11 @@ export const storage = new Storage(client);
 export const realtime = new Realtime(client);
 
 // Database and collection IDs (your specific IDs)
-export const DATABASE_ID = '6a3a5935001b389ccd3b';
+export const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || '6a3a5935001b389ccd3b';
 export const TABLE_SPACES = 'spaces';
 
 // Storage bucket ID (your specific bucket)
-export const BUCKET_ID = '6a3a594a0018f9b4876e';
+export const BUCKET_ID = import.meta.env.VITE_APPWRITE_BUCKET_ID || '6a3a594a0018f9b4876e';
 
 // Storage helpers
 export interface UploadResult {
